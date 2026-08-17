@@ -25,14 +25,14 @@ export function mountUpdate(program: Command): void {
     const method = detectInstallMethod();
     const command =
       method === "brew"
-        ? ["brew", "upgrade", "workerkit/tap/wk-cli"]
+        ? ["brew", "upgrade", "workerkit/tap/wk"]
         : ["npm", "install", "-g", "@workerkit/cli@latest"];
 
     process.stdout.write(`Current version: ${cliVersion()}\n`);
     if (method === "unknown") {
-      // npm only: the Homebrew tap does not exist yet, so naming it here would print a command
-      // that fails. The brew branch above stays for when the tap ships.
-      process.stdout.write(`Install method not detected. Update with:\n  npm install -g @workerkit/cli@latest\n`);
+      process.stdout.write(
+        `Install method not detected. Update with one of:\n  npm install -g @workerkit/cli@latest\n  brew upgrade workerkit/tap/wk\n`,
+      );
       return;
     }
 

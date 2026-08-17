@@ -1,13 +1,27 @@
 # WorkerKit CLI (`wk`)
 
+[![CI](https://github.com/workerkit/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/workerkit/cli/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/%40workerkit%2Fcli.svg?color=2ea44f)](https://www.npmjs.com/package/@workerkit/cli)
+[![node](https://img.shields.io/node/v/%40workerkit%2Fcli.svg)](https://nodejs.org)
+[![license](https://img.shields.io/npm/l/%40workerkit%2Fcli.svg)](LICENSE)
+
 Manage your [WorkerKit](https://workerkit.ai) AI workers and browse the kit directory from the
-terminal.
+terminal. Every command is bound to the same tool definitions the WorkerKit MCP server exposes
+to AI agents, so the CLI, the MCP surface and the API cannot drift apart.
+
+## Install
 
 ```
 npm install -g @workerkit/cli
 ```
 
-Requires Node.js 22 or newer.
+Or with [Homebrew](https://github.com/workerkit/homebrew-tap):
+
+```
+brew install workerkit/tap/wk
+```
+
+The npm package requires Node.js 22 or newer; the Homebrew formula brings its own.
 
 ## Sign in
 
@@ -66,8 +80,17 @@ Global flags: `--json` (raw API data, stable machine contract), `--plain` (compa
 text), `--yes` (skip confirmations), `--profile <name>`. They work before or after the
 subcommand: `wk --json workers list` and `wk workers list --json` are equivalent.
 
-Exit codes: `0` success (including a run receipt whose status is `Skipped`), `1` API error,
-`2` usage error, `3` authentication, `4` rate-limited, `5` network, `130` interrupted.
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success, including a run receipt whose status is `Skipped` |
+| 1 | API error |
+| 2 | Usage error |
+| 3 | Authentication needed or refused |
+| 4 | Rate-limited |
+| 5 | Network failure |
+| 130 | Interrupted (Ctrl-C) |
 
 ## Configuration
 
@@ -81,6 +104,25 @@ Exit codes: `0` success (including a run receipt whose status is `Skipped`), `1`
 
 Credentials are stored in your OS keychain when available, falling back to a `0600` file. See the
 [security policy](https://github.com/workerkit/cli/blob/main/SECURITY.md).
+
+## Development
+
+```bash
+git clone https://github.com/workerkit/cli.git && cd cli
+npm ci
+npm test            # unit suites + golden contract + an end-to-end sign-in against a local stand-in server
+npm run typecheck
+npm run build       # dist/, which `node dist/index.js` runs directly
+```
+
+Issues and pull requests are welcome. Commands are generated from the shared
+[`@workerkit/core`](https://github.com/workerkit/core) tool descriptors; a coverage test asserts
+every descriptor is reachable, so a new tool usually needs no CLI code at all. Security reports
+go to [SECURITY.md](SECURITY.md), not the issue tracker.
+
+Releases are tag-driven: maintainers push a `vX.Y.Z` tag and CI publishes to npm via
+[trusted publishing](https://docs.npmjs.com/trusted-publishers) with a provenance attestation.
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ## Legal
 

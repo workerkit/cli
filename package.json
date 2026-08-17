@@ -1,6 +1,6 @@
 {
   "name": "@workerkit/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "WorkerKit CLI: manage your AI workers and browse the kit directory from the terminal",
   "keywords": [
     "workerkit",
@@ -30,7 +30,8 @@
     "wk": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -47,7 +48,7 @@
   },
   "dependencies": {
     "@napi-rs/keyring": "1.1.9",
-    "@workerkit/core": "0.1.2",
+    "@workerkit/core": "0.1.3",
     "commander": "13.0.0"
   },
   "devDependencies": {
