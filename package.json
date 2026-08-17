@@ -1,0 +1,59 @@
+{
+  "name": "@workerkit/cli",
+  "version": "0.1.0",
+  "description": "WorkerKit CLI: manage your AI workers and browse the kit directory from the terminal",
+  "keywords": [
+    "workerkit",
+    "cli",
+    "ai-workers",
+    "ai-agents",
+    "agents",
+    "automation",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "chatgpt"
+  ],
+  "license": "MIT",
+  "author": "WorkerKit <support@workerkit.ai>",
+  "homepage": "https://workerkit.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/workerkit/cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/workerkit/cli/issues",
+    "email": "support@workerkit.ai"
+  },
+  "type": "module",
+  "bin": {
+    "wk": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "1.1.9",
+    "@workerkit/core": "0.1.2",
+    "commander": "13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "tsx": "4.20.3",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
