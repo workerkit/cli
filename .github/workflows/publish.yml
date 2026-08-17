@@ -24,6 +24,9 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
+      # OIDC trusted publishing needs npm >= 11.5.1; Node 22 still bundles npm 10.x, which
+      # silently falls back to the legacy token flow and fails with ENEEDAUTH.
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
