@@ -81,6 +81,30 @@ export function mountRuns(program: Command): void {
     summary: "Scrub a run's stored digest text",
   });
 
+  mountTool(runs, "feed", {
+    tool: "runs_feed",
+    summary: "The account-wide run feed, newest first (cursor-paged; the API's `wait` turns it into a long poll)",
+    render: (data) => {
+      const body = data as { runs?: RunRow[]; items?: RunRow[] };
+      const rows = body.runs ?? body.items;
+      if (!Array.isArray(rows)) return null;
+      if (rows.length === 0) return "No runs on the account yet.";
+      return runsTable(rows);
+    },
+  });
+
+  mountTool(runs, "question", {
+    tool: "run_question",
+    positionals: ["runId"],
+    summary: "The question a run ended by asking its owner (status awaitingInput)",
+  });
+
+  mountTool(runs, "answer", {
+    tool: "run_answer",
+    positionals: ["runId", "answer"],
+    summary: "Answer a run's question: mints a LINKED follow-on run (the run id changes)",
+  });
+
   const scoreSpec = {
     tool: "run_score",
     positionals: ["runId"],

@@ -10,7 +10,16 @@ import { mountedSpecs } from "../../src/bind.js";
  */
 
 // Tools wired through bespoke commands (runTool/executeTool directly) rather than mountTool.
-const BESPOKE_TOOLS = ["worker_run", "run_score", "instruction_set", "kit_install_preview", "kit_install"];
+const BESPOKE_TOOLS = [
+  "worker_run", "run_score", "instruction_set", "kit_install_preview", "kit_install",
+  // The kit-authoring writes read their body from a file or stdin, then validate → confirm → act.
+  "kit_validate", "kit_publish", "kit_replace",
+  // The secret-carrying writes read the secret from a file, stdin or a hidden prompt — never a
+  // generated flag that would land in shell history.
+  "app_connect", "model_key_set", "mcp_server_create",
+  // Tool ids are variadic positionals rather than a JSON flag.
+  "mcp_server_set_tools",
+];
 
 describe("command coverage", () => {
   it("every core descriptor is reachable from the CLI", () => {

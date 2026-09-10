@@ -4,6 +4,52 @@ All notable changes to `@workerkit/cli` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-09-10
+
+### Added
+
+Parity with `@workerkit/core` 0.3.0 — every one of its 77 descriptors is reachable.
+
+- **About WorkerKit.** `wk about [--section index|why|operate|access|cost|start]`
+  (anonymous): what WorkerKit is and when to use it, written for an agent — the
+  request shapes that call for a worker, how a fleet is operated from an agent's
+  seat, the access model, the money rules, and how to connect from each kind of
+  host. The first command an agent driving this CLI should run.
+- **Kit authoring.** `wk kit tools` (what a worker can do, app by app, with the
+  operation key that unlocks each tool), `wk kit guide` and `wk kit vocabulary`
+  (all anonymous), `wk kit validate`, `wk kit publish` (validate → confirm →
+  publish; `--private` / `--public`), `wk kit replace`, `wk kit mine`, `wk kit
+  scan`, `wk kit update`, `wk kit unpublish|relist|make-private|delete`,
+  `wk publisher me|set`. Bodies come from `--file` or stdin. Publishing a
+  private kit and installing it is how a worker is created from scratch.
+- **Connected apps.** `wk apps list` (which apps the operator can use, in the
+  kit vocabulary, and how to connect the rest), `wk apps connect <provider>`
+  (the credential comes from `--field name=value`, `--credential`,
+  `--credential-file`, stdin, or a hidden prompt — validated live, stored
+  encrypted, never shown again), `wk apps disconnect`.
+- **Model keys.** `wk model-keys list|set|delete` — the account's own
+  model-provider API keys; `set` reads the key from `--key-file`, stdin or a
+  hidden prompt.
+- **Custom MCP servers.** `wk mcp-servers create <name> <url>` registers an MCP
+  server as your own custom MCP app — the way to reach an app the platform does
+  not offer — with its credential (from `--field`, `--credential`,
+  `--credential-file`, stdin or a hidden prompt; `--account` stores one
+  credential for every operator) and lists its tools; `wk mcp-servers
+  set-tools <handle> <toolId...>` enables the tools a job needs, which publishes
+  the server; `wk mcp-servers list|get|discover|delete`.
+- **Workers.** `wk workers permissions`, `wk workers clone-preview|clone|clone-bulk`
+  (new keys printed once), `wk workers budget|budget-set`.
+- **Runs and fleet.** `wk runs feed`, `wk runs question|answer`, `wk fleet
+  pulse|budget|budget-set`.
+- **Deliveries.** `wk deliveries list|channels|create|update|rotate-secret|delete`
+  (a webhook's signing secret is printed once, on create and on rotate).
+- **Instruction history.** `wk instruction versions|version|restore`.
+- `wk auth key-info`.
+
+### Changed
+
+- `@workerkit/core` dependency updated to 0.3.0.
+
 ## [0.1.1] - 2026-08-17
 
 ### Added

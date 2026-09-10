@@ -7,6 +7,7 @@ import { renderTable, renderDetail } from "../output/table.js";
 import { confirm } from "../output/confirm.js";
 import { bold, cyan, red, yellow } from "../output/colors.js";
 import { sanitizeInline, sanitizeText } from "../output/sanitize.js";
+import { mountKitAuthoring, mountPublisherAuthoring } from "./kitAuthoring.js";
 
 interface KitCard {
   slug?: string;
@@ -26,7 +27,12 @@ export function mountKit(program: Command): void {
     render: (data) => {
       const body = data as { items?: KitCard[] };
       if (!Array.isArray(body.items)) return null;
-      if (body.items.length === 0) return "No kits matched. Drop a filter or try a shorter query.";
+      if (body.items.length === 0) {
+        return (
+          "No kits matched. Drop a filter or try a shorter query. If nothing fits after broadening, author a kit for the exact job " +
+          "rather than installing a near miss: wk kit guide, wk kit tools, then wk kit validate, wk kit publish --private and wk kit install."
+        );
+      }
       return renderTable(body.items, [
         { header: "SLUG", value: (k) => k.slug ?? "" },
         { header: "NAME", value: (k) => k.name ?? "", maxWidth: 30 },
@@ -196,6 +202,10 @@ export function mountKit(program: Command): void {
       );
     }
   });
+
+  // The authoring lane: guide + vocabulary (anonymous), then validate / publish / replace and
+  // the listing lifecycle. Lives in its own module — this file is the browse-and-install half.
+  mountKitAuthoring(kit);
 }
 
 function safeJson(value: unknown): unknown | null {
@@ -215,4 +225,5 @@ export function mountPublisher(program: Command): void {
     positionals: ["slug"],
     summary: "A publisher's profile and kit list",
   });
+  mountPublisherAuthoring(publisher);
 }

@@ -44,33 +44,74 @@ Alternatives:
 ## Commands
 
 ```
+wk about [--section why]              # what WorkerKit is and when to use it, written for agents (anonymous)
+
 wk workers list                       # your fleet, status + last/next run
 wk workers get <tokenId>              # tokenId = the ID column in `wk workers list`
 wk workers enable|disable <tokenId>
+wk workers permissions <tokenId>      # what it may touch, in the kit vocabulary (read-only)
+wk workers clone-preview|clone|clone-bulk <tokenId> [--title ...]   # keys shown once
+wk workers budget|budget-set <tokenId> ...
 
 wk run <tokenId> [--prompt ...] [--follow]
 wk runs list <tokenId> [--status ...]
+wk runs feed [--status ...]           # the account-wide feed (no per-worker fan-out)
 wk runs get <runId>
 wk runs events <runId>                # one page of the event feed
 wk runs tail <runId>                  # live event feed until the run settles
+wk runs question|answer <runId> ...   # two-way runs
 wk runs cancel <runId>
 wk runs score <runId> <0-100>         # or --clear
 wk runs clear-digest <runId>
+wk fleet pulse|budget|budget-set      # everything in flight; the account-wide ceilings
 
 wk memory get|add|update|delete <tokenId> ...
 wk schedules list|create|update|delete <tokenId> ...
+wk deliveries list|channels|create|update|rotate-secret|delete <tokenId> ...
 wk instruction get|set <tokenId> [--file ...]
+wk instruction versions|version|restore <tokenId> [versionNumber]
 
 wk kit search [--query ...] [--category ...]   # anonymous: works before sign-in
 wk kit get <slug>
 wk kit stats <slug>
 wk kit categories                     # the directory's filter vocabulary
 wk kit install <slug> [--preview]     # preview → confirm → install
+wk kit tools [--app email]            # what a worker can do, app by app, with the keys that unlock each tool (anonymous)
+wk kit guide [--section schema]       # how to write a kit (anonymous)
+wk kit vocabulary [--app email]       # the live tool-key vocabulary (anonymous)
+wk kit validate --file kit.json       # every gate's verdict at once
+wk kit publish --file kit.json --private   # validate → confirm → publish
+wk kit replace <slug> --file kit.json [--public]
+wk kit mine                           # your kits, with moderation state
+wk kit scan|update|unpublish|relist|make-private|delete <slug>
 wk publisher get <slug>
+wk publisher me|set ...
 
+wk apps list [--operator-id ...]      # which apps the operator can use, how to connect the rest
+wk apps connect <provider> [--field name=value ...]   # secret from a file, stdin or a hidden prompt
+wk apps disconnect <provider> <connectionId>
+wk model-keys list|set|delete <provider>   # the account's own model-provider API keys
+wk mcp-servers list|get <handle>      # your own MCP servers: reach an app the platform does not offer
+wk mcp-servers create <name> <url> --auth-type Bearer   # register + credential (file, stdin or prompt) + discover
+wk mcp-servers discover|delete <handle>
+wk mcp-servers set-tools <handle> <toolId...>   # enabling ≥1 tool publishes the server
+
+wk auth key-info                      # what the current key is and its scopes
 wk auth status|logout|profiles|use
 wk update                             # update the CLI itself
 ```
+
+Creating a worker from scratch is a two-step: `wk kit publish --file kit.json --private`, then
+`wk kit install <slug>`. A private kit is installable only by your account and goes through the
+same validators as a directory listing — that is the platform's rule for permissions authored by an
+agent. `wk kit tools`, `wk kit guide` and `wk kit vocabulary` are what to read first, and
+`wk apps list` says which apps the worker will actually be able to reach: a worker only uses apps
+that are connected on its operator. `wk apps connect` connects the credential-based ones (bot
+tokens, API keys, private-app tokens); Google, Microsoft, GitHub and Reddit sign in on the
+dashboard. An app the platform does not offer can still be reached through its MCP server:
+`wk mcp-servers create` registers it as your own custom MCP app (credential included),
+`wk mcp-servers set-tools` enables the tools a job needs — which publishes it — and the kit binds
+it in `content.mcpServers` by the kit id `wk mcp-servers list` shows.
 
 Flags mirror the API's field names in kebab-case (`--page-size`, `--from-utc`); boolean flags
 also take a `--no-` form to pass an explicit false (`--no-is-enabled`). Run any command with

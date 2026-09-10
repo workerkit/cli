@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { cliVersion } from "./version.js";
+import { mountAbout } from "./commands/about.js";
 import { mountAuth } from "./commands/auth.js";
 import { mountWorkers } from "./commands/workers.js";
 import { mountRun } from "./commands/run.js";
@@ -8,6 +9,10 @@ import { mountMemory } from "./commands/memory.js";
 import { mountSchedules } from "./commands/schedules.js";
 import { mountInstruction } from "./commands/instruction.js";
 import { mountKit, mountPublisher } from "./commands/kit.js";
+import { mountDeliveries } from "./commands/deliveries.js";
+import { mountFleet } from "./commands/fleet.js";
+import { mountApps, mountModelKeys } from "./commands/apps.js";
+import { mountMcpServers } from "./commands/mcpServers.js";
 import { mountUpdate } from "./commands/update.js";
 
 export function buildProgram(): Command {
@@ -32,6 +37,7 @@ export function buildProgram(): Command {
     process.exit(2);
   });
 
+  mountAbout(program);
   mountAuth(program);
   mountWorkers(program);
   mountRun(program);
@@ -39,8 +45,13 @@ export function buildProgram(): Command {
   mountMemory(program);
   mountSchedules(program);
   mountInstruction(program);
+  mountDeliveries(program);
+  mountFleet(program);
   mountKit(program);
   mountPublisher(program);
+  mountApps(program);
+  mountModelKeys(program);
+  mountMcpServers(program);
   mountUpdate(program);
 
   return program;

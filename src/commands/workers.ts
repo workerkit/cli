@@ -1,7 +1,8 @@
 import type { Command } from "commander";
 import { mountTool } from "../bind.js";
 import { renderTable, renderDetail } from "../output/table.js";
-import { green, red, yellow } from "../output/colors.js";
+import { bold, green, red, yellow } from "../output/colors.js";
+import { sanitizeInline } from "../output/sanitize.js";
 
 interface WorkerRow {
   workerId?: string;
@@ -82,4 +83,84 @@ export function mountWorkers(program: Command): void {
     summary: "Stop a worker: pauses its API key AND all of its schedules",
     confirm: (p) => `Stop worker ${p.tokenId}? Its key stops working and schedules stop firing.`,
   });
+
+  mountTool(workers, "permissions", {
+    tool: "worker_permissions_get",
+    positionals: ["tokenId"],
+    summary: "What a worker may touch, in the kit-authoring vocabulary (read-only), plus how many rules it carries",
+  });
+
+  // ── creation by cloning: the only non-kit creation path; each new key is shown once ────────
+  mountTool(workers, "clone-preview", {
+    tool: "worker_clone_preview",
+    positionals: ["tokenId"],
+    summary: "What a clone WOULD create: apps, counts of what travels, blockers. Creates nothing",
+  });
+
+  mountTool(workers, "clone", {
+    tool: "worker_clone",
+    positionals: ["tokenId"],
+    confirm: (p) => `Clone worker ${p.tokenId} into a new worker${p.title ? ` "${String(p.title)}"` : ""}? Its permissions AND restriction rules travel.`,
+    summary: "Clone a worker into a new one (run clone-preview first); the new key is shown ONCE",
+    render: cloneResult,
+  });
+
+  mountTool(workers, "clone-bulk", {
+    tool: "worker_clone_bulk",
+    positionals: ["tokenId"],
+    confirm: (p) => `Clone worker ${p.tokenId} into ${Array.isArray(p.workers) ? p.workers.length : "several"} new workers? Not atomic — read items[] rather than the status.`,
+    summary: "Clone a worker into up to 20 new ones: --workers '[{\"title\":\"...\"}, ...]'; each new key is shown ONCE",
+    render: cloneBulkResult,
+  });
+
+  mountTool(workers, "budget", {
+    tool: "budget_get",
+    positionals: ["tokenId"],
+    summary: "A worker's spend and rate ceilings",
+  });
+
+  mountTool(workers, "budget-set", {
+    tool: "budget_set",
+    positionals: ["tokenId"],
+    summary: "Change a worker's spend / rate ceilings and its question timeout (omitted fields unchanged)",
+  });
+}
+
+interface CloneItem {
+  index?: number;
+  title?: string;
+  success?: boolean;
+  workerId?: string;
+  tokenId?: number;
+  rawKey?: string | null;
+  error?: string | null;
+}
+
+/** A clone's key exists exactly once — in this response. Print it before anything else. */
+function cloneResult(data: unknown): string | null {
+  const item = data as CloneItem;
+  if (typeof item !== "object" || item === null || item.success === undefined) return null;
+  const lines: string[] = [];
+  if (item.success) {
+    lines.push(`${green("Created")} worker ${item.tokenId ?? "?"} (${sanitizeInline(item.workerId ?? "")}) — ${sanitizeInline(item.title ?? "")}`);
+    if (item.rawKey) {
+      lines.push(red(bold("Worker key — shown ONCE, store it now:")));
+      lines.push(`  ${sanitizeInline(item.rawKey)}`);
+    }
+    if (item.error) lines.push(`${yellow("Created with a warning:")} ${sanitizeInline(item.error)}`);
+  } else {
+    lines.push(`${red("Not created:")} ${sanitizeInline(item.error ?? "unknown error")}`);
+  }
+  return lines.join("\n");
+}
+
+function cloneBulkResult(data: unknown): string | null {
+  const body = data as { requested?: number; created?: number; items?: CloneItem[] };
+  if (!Array.isArray(body.items)) return null;
+  const lines = [`${bold(`${body.created ?? 0} of ${body.requested ?? body.items.length} created`)}`];
+  for (const item of body.items) {
+    const rendered = cloneResult(item);
+    if (rendered) lines.push(`[${item.index ?? "?"}] ${rendered}`);
+  }
+  return lines.join("\n");
 }

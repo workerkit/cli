@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { byName } from "@workerkit/core";
 import { mountTool, runTool, globalOpts } from "../bind.js";
+import { readStdin } from "../input.js";
 import { sanitizeText } from "../output/sanitize.js";
 
 export function mountInstruction(program: Command): void {
@@ -16,6 +17,30 @@ export function mountInstruction(program: Command): void {
       if (body && typeof body.content === "string") return sanitizeText(body.content);
       return null;
     },
+  });
+
+  mountTool(instruction, "versions", {
+    tool: "instruction_versions",
+    positionals: ["tokenId"],
+    summary: "The instruction's version history, newest first",
+  });
+
+  mountTool(instruction, "version", {
+    tool: "instruction_version_get",
+    positionals: ["tokenId", "versionNumber"],
+    summary: "One earlier version's text (protected kits refuse)",
+    render: (data) => {
+      const body = data as { content?: string };
+      if (body && typeof body.content === "string") return sanitizeText(body.content);
+      return null;
+    },
+  });
+
+  mountTool(instruction, "restore", {
+    tool: "instruction_restore",
+    positionals: ["tokenId", "versionNumber"],
+    confirm: (p) => `Restore version ${p.versionNumber} of worker ${p.tokenId}'s instruction? (appends a new version; reversible)`,
+    summary: "Roll the instruction back to an earlier version (appends a new version, so it is itself reversible)",
   });
 
   const set = instruction
@@ -37,9 +62,7 @@ export function mountInstruction(program: Command): void {
     if (typeof options.file === "string" && options.file) {
       content = readFileSync(options.file, "utf8");
     } else if (!process.stdin.isTTY) {
-      const chunks: Buffer[] = [];
-      for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-      content = Buffer.concat(chunks).toString("utf8");
+      content = await readStdin();
     } else {
       process.stderr.write("Provide the instruction via --file <path> or pipe it on stdin.\n");
       process.exitCode = 2;

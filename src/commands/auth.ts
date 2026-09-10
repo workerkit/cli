@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { byName, executeTool, isSuccess } from "@workerkit/core";
-import { globalOpts } from "../bind.js";
+import { globalOpts, mountTool } from "../bind.js";
 import { apiBaseUrl, buildClient } from "../context.js";
 import { startLogin, pollForKey, openBrowser } from "../auth/login.js";
 import {
@@ -13,13 +13,18 @@ import {
   writeConfig,
 } from "../auth/store.js";
 import { bold, cyan, dim, green } from "../output/colors.js";
-import { promptHidden } from "../output/confirm.js";
+import { promptHidden } from "../input.js";
 import { sanitizeInline } from "../output/sanitize.js";
 
 const KEY_PREFIX = "pe_mgr_";
 
 export function mountAuth(program: Command): void {
   const auth = program.command("auth").description("Sign in, inspect and switch profiles");
+
+  mountTool(auth, "key-info", {
+    tool: "key_info",
+    summary: "What the current key is: account, scopes (exactly what the other commands will accept), expiry",
+  });
 
   const login = auth
     .command("login")
