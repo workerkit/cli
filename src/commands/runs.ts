@@ -74,6 +74,19 @@ export function mountRuns(program: Command): void {
     summary: "Cancel an in-flight run",
   });
 
+  mountTool(runs, "transcript", {
+    tool: "run_transcript",
+    positionals: ["runId"],
+    summary: "The run's stored LLM process log (opt-in per deployment; 404 no_transcript otherwise)",
+  });
+
+  mountTool(runs, "bulk", {
+    tool: "run_bulk",
+    confirm: (p) =>
+      `Run ${Array.isArray(p.workers) ? p.workers.length : "several"} workers now? Not atomic — read items[] rather than the status.`,
+    summary: "Run up to 20 workers now: --workers '[{\"workerId\":\"...\",\"prompt\":\"...\"}, ...]' (not atomic; read items[])",
+  });
+
   mountTool(runs, "clear-digest", {
     tool: "run_clear_digest",
     positionals: ["runId"],

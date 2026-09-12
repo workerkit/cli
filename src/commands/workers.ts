@@ -11,8 +11,10 @@ interface WorkerRow {
   status?: string;
   isEnabled?: boolean;
   isRunning?: boolean;
-  lastRun?: { status?: string; finishedAtUtc?: string } | null;
+  lastRun?: { status?: string; outcome?: string; finishedAtUtc?: string } | null;
   schedules?: { nextRunUtc?: string | null; enabledCount?: number } | null;
+  readiness?: { status?: string } | null;
+  deployment?: { status?: string } | null;
 }
 
 function paintStatus(status: string): string {
@@ -26,17 +28,25 @@ export function mountWorkers(program: Command): void {
 
   mountTool(workers, "list", {
     tool: "workers_list",
-    summary: "List every worker on the account with status and run rollups",
+    summary: "List the workers on the account with status, readiness, deployment and run rollups (filterable)",
     render: (data) => {
-      const body = data as { workers?: WorkerRow[] };
+      const body = data as { workers?: WorkerRow[]; totalWorkers?: number };
       if (!Array.isArray(body.workers)) return null;
-      if (body.workers.length === 0) return "No workers yet. Install one with `wk kit search` + `wk kit install <slug>`.";
+      if (body.workers.length === 0) {
+        // totalWorkers is the unfiltered count: zero is an empty account, non-zero a filter that
+        // matched nothing — two different next steps.
+        return body.totalWorkers
+          ? `No workers match those filters (${body.totalWorkers} on the account).`
+          : "No workers yet. Install one with `wk kit search` + `wk kit install <slug>`.";
+      }
       return renderTable(body.workers, [
         { header: "ID", value: (w) => String(w.tokenId ?? "") },
         { header: "TITLE", value: (w) => w.title ?? "(untitled)", maxWidth: 32 },
         { header: "STATUS", value: (w) => w.status ?? "?", paint: paintStatus },
+        { header: "READY", value: (w) => w.readiness?.status ?? "" },
+        { header: "DEPLOYED", value: (w) => (w.deployment ? "yes" : "") },
         { header: "RUNNING", value: (w) => (w.isRunning ? "yes" : "") },
-        { header: "LAST RUN", value: (w) => w.lastRun?.status ?? "" },
+        { header: "LAST RUN", value: (w) => w.lastRun?.outcome ?? w.lastRun?.status ?? "" },
         { header: "NEXT RUN", value: (w) => w.schedules?.nextRunUtc ?? "" },
         { header: "WORKER ID", value: (w) => w.workerId ?? "" },
       ]);
@@ -82,6 +92,15 @@ export function mountWorkers(program: Command): void {
     fixed: { enabled: false },
     summary: "Stop a worker: pauses its API key AND all of its schedules",
     confirm: (p) => `Stop worker ${p.tokenId}? Its key stops working and schedules stop firing.`,
+  });
+
+  mountTool(workers, "delete", {
+    tool: "worker_delete",
+    positionals: ["tokenId"],
+    confirm: (p) =>
+      `PERMANENTLY delete worker ${p.tokenId}? Its key stops, its schedules stop, and its SUB-WORKERS go with it. ` +
+      "Nothing undoes this (`wk workers disable` is the reversible stop).",
+    summary: "Delete a worker permanently, with its sub-workers (`disable` is the reversible stop)",
   });
 
   mountTool(workers, "permissions", {

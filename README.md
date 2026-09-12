@@ -46,24 +46,32 @@ Alternatives:
 ```
 wk about [--section why]              # what WorkerKit is and when to use it, written for agents (anonymous)
 
-wk workers list                       # your fleet, status + last/next run
+wk workers list [--status ...] [--deployed] [--readiness ...] [--q ...]   # your fleet, filterable
 wk workers get <tokenId>              # tokenId = the ID column in `wk workers list`
 wk workers enable|disable <tokenId>
+wk workers delete <tokenId>           # permanent, takes sub-workers with it (`disable` is the reversible stop)
 wk workers permissions <tokenId>      # what it may touch, in the kit vocabulary (read-only)
 wk workers clone-preview|clone|clone-bulk <tokenId> [--title ...]   # keys shown once
 wk workers budget|budget-set <tokenId> ...
 
+wk deploy <tokenId> [--model-slug ...]   # put a worker on the hosted runtime: what makes it run
+wk deployment list|get|update|remove <tokenId> ...
+wk deployment models                  # what this account may deploy on, priced
+
 wk run <tokenId> [--prompt ...] [--follow]
+wk runs bulk --workers '[...]'        # one prompt across up to 20 workers (not atomic; read items[])
 wk runs list <tokenId> [--status ...]
 wk runs feed [--status ...]           # the account-wide feed (no per-worker fan-out)
 wk runs get <runId>
 wk runs events <runId>                # one page of the event feed
 wk runs tail <runId>                  # live event feed until the run settles
+wk runs transcript <runId>            # the stored LLM process log (opt-in per deployment)
 wk runs question|answer <runId> ...   # two-way runs
 wk runs cancel <runId>
 wk runs score <runId> <0-100>         # or --clear
 wk runs clear-digest <runId>
-wk fleet pulse|budget|budget-set      # everything in flight; the account-wide ceilings
+wk fleet pulse|health|budget|budget-set   # in flight; the rot digest; the account-wide ceilings
+wk account usage                      # plan, worker + hosted slots, wallet, request windows, spend
 
 wk memory get|add|update|delete <tokenId> ...
 wk schedules list|create|update|delete <tokenId> ...

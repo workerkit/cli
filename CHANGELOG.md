@@ -4,6 +4,35 @@ All notable changes to `@workerkit/cli` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-09-12
+
+### Added
+
+Parity with `@workerkit/core` 0.3.2 — every one of its 88 descriptors is reachable.
+
+- **Deployment.** `wk deploy <tokenId>` puts a worker on the hosted runtime, the step
+  that makes an installed worker actually run (a worker with no deployment fires no
+  schedule and `wk run` refuses it with `not_deployed`). `wk deployment
+  list|get|update|remove` manages the deployment — model, ceilings, transcript retention,
+  `--action pause|resume` — and `wk deployment models` is the priced picker.
+- **Fleet health.** `wk fleet health`: the fleet's rot in one call — blocked workers,
+  workers installed but never deployed, schedules the runtime is not picking up, runs
+  waiting on an answer, and last runs that did not end clean.
+- **Account usage.** `wk account usage`: plan, worker and hosted slots, the spendable
+  wallet balance, the plan's request windows and settled spend — read before an
+  install, a deploy or a run rather than discovering a 402.
+- **Workers.** `wk workers delete` (permanent, takes sub-workers with it; `disable`
+  stays the reversible stop), and `wk workers list` takes `--status`, `--deployed`,
+  `--readiness` and `--q`, shows READY and DEPLOYED columns, and tells a filter that
+  matched nothing apart from an empty account.
+- **Runs.** `wk runs transcript` (the stored LLM process log, opt-in per deployment)
+  and `wk runs bulk` (one prompt across up to 20 workers; not atomic, read `items[]`).
+
+### Changed
+
+- `@workerkit/core` dependency updated to 0.3.2. `wk runs list` / `wk runs feed` accept
+  `--status awaitingInput`.
+
 ## [0.2.0] - 2026-09-10
 
 ### Added
