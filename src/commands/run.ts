@@ -26,6 +26,8 @@ interface DecisionRow {
 interface DecisionBlock {
   outcome?: string;
   confidence?: number;
+  model?: string;
+  answersOverride?: Record<string, unknown> | null;
   decisions?: DecisionRow[];
   openQuestions?: unknown[];
   contentWithheld?: boolean;
@@ -77,6 +79,14 @@ function renderDecision(block: DecisionBlock): string[] {
     lines.push(`Items: ${parts.join(", ")}`);
   }
 
+  // The per-run answers the run was actually minted with: the receipt is where a caller confirms
+  // an override landed, rather than assuming it did.
+  const override = block.answersOverride;
+  if (override && typeof override === "object" && Object.keys(override).length > 0) {
+    lines.push(`Per-run answers applied: ${sanitizeInline(Object.keys(override).join(", "))}`);
+  }
+  if (typeof block.model === "string") lines.push(`Decision model: ${sanitizeInline(block.model)}`);
+
   const open = Array.isArray(block.openQuestions) ? block.openQuestions.length : 0;
   if (open > 0) lines.push(yellow(`${open} open question(s) for a person to look at.`));
   if (lines.length > 0) lines.push("Per-item rows: `wk runs get <runId> --json`.");
@@ -92,13 +102,14 @@ export function mountRun(program: Command): void {
     .option("--model <slug>", "Language workers: override the model for this run")
     .option("--preview", "Decision workers: report what this run WOULD do and act on nothing")
     .option("--source-args <json>", "Decision workers: narrow what is decided about (JSON object, merged over the spec's source args)")
+    .option("--answers <json>", "Decision workers: per-run answers to the install questions (JSON object of key → value, laid over the stored answers for this run only)")
     .option("--max-items <n>", "Decision workers: judge at most this many items this run")
     .option("--wait-seconds <n>", "Wait up to N seconds (max 55) for the settled receipt instead of returning the freshly minted one")
     .option("-f, --follow", "Stay attached and stream the run's events until it settles");
 
   cmd.action(async (tokenId: string, options: {
     prompt?: string; model?: string; follow?: boolean;
-    preview?: boolean; sourceArgs?: string; maxItems?: string; waitSeconds?: string;
+    preview?: boolean; sourceArgs?: string; answers?: string; maxItems?: string; waitSeconds?: string;
   }) => {
     const globals = globalOpts(cmd);
     const descriptor = byName("worker_run");
@@ -115,6 +126,15 @@ export function mountRun(program: Command): void {
         params.sourceArgs = JSON.parse(options.sourceArgs) as unknown;
       } catch {
         process.stderr.write("--source-args must be a JSON object.\n");
+        process.exitCode = 2;
+        return;
+      }
+    }
+    if (options.answers !== undefined) {
+      try {
+        params.answers = JSON.parse(options.answers) as unknown;
+      } catch {
+        process.stderr.write("--answers must be a JSON object of key → value.\n");
         process.exitCode = 2;
         return;
       }
@@ -143,7 +163,7 @@ export function mountRun(program: Command): void {
       {
         tool: "worker_run",
         positionals: ["tokenId"],
-        hidden: ["prompt", "modelSlug", "preview", "sourceArgs", "maxItems", "waitSeconds"],
+        hidden: ["prompt", "modelSlug", "preview", "sourceArgs", "answers", "maxItems", "waitSeconds"],
         render: (data) => {
           const receipt = data as {
             runId?: string;

@@ -10,7 +10,7 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-Parity with `@workerkit/core` 0.3.3 — decision workers, on the commands that already existed.
+Parity with `@workerkit/core` 0.3.4 — decision workers, on the commands that already existed.
 
 - **`wk run`** gains `--preview` (report what this run would do and act on nothing),
   `--source-args '{...}'` (narrow what is decided about), `--max-items` and `--wait-seconds`
@@ -18,6 +18,10 @@ Parity with `@workerkit/core` 0.3.3 — decision workers, on the commands that a
   Running a decision worker for real confirms first: its table acts on every item it routes.
   A waited run prints what it decided — outcome, confidence, how many were acted on or fell
   below the floor — rather than only the run id.
+- **`wk run --answers '{...}'`** — per-run answers to a decision worker's install questions, laid
+  over the stored ones for this run only and never saved: how a caller names a searcher kit's
+  target without touching the worker's setup, so two callers on one worker never see each other's.
+  A waited run names the keys the override actually applied and the decision model that answered.
 - **`wk instruction get`** reads a decision worker's routing table, its install questions and
   their answers, and `--options-for <key>` lists an app pick's live values from the worker's own
   app. A pending question is called out where it is read, because it blocks both deploy and run.

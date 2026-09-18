@@ -60,7 +60,7 @@ wk deployment models                  # what this account may deploy on, priced
 wk deployment update <tokenId> --decision-mode preview|live   # a decision worker: preview = report only; live (the default) acts
 
 wk run <tokenId> [--prompt ...] [--follow]
-wk run <tokenId> [--preview] [--source-args '{...}'] [--max-items 20] [--wait-seconds 25]   # a decision worker's per-item decisions
+wk run <tokenId> [--preview] [--source-args '{...}'] [--answers '{...}'] [--max-items 20] [--wait-seconds 25]   # a decision worker's per-item decisions; --answers = per-run install answers, never saved
 wk runs bulk --workers '[...]'        # one prompt across up to 20 workers (not atomic; read items[])
 wk runs list <tokenId> [--status ...]
 wk runs feed [--status ...]           # the account-wide feed (no per-worker fan-out)
