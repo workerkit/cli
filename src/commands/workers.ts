@@ -62,20 +62,33 @@ export function mountWorkers(program: Command): void {
         jobSentence?: string | null;
         readiness?: { status?: string };
         kit?: { slug?: string } | null;
+        modelType?: string | null;
+        decisionPendingSetup?: string[] | null;
       };
       if (typeof w !== "object" || w === null || w.tokenId === undefined) return null;
-      return renderDetail([
+      // modelType is the field that says which calls this worker accepts — a decision worker takes
+      // no prompt and no model, and any question still blank in decisionPendingSetup blocks both
+      // deploy and run, so neither belongs buried in --json.
+      const pending = Array.isArray(w.decisionPendingSetup) ? w.decisionPendingSetup : [];
+      const detail = renderDetail([
         ["ID", String(w.tokenId)],
         ["Worker ID", w.workerId ?? null],
         ["Title", w.title ?? "(untitled)"],
         ["Status", w.status ?? null],
         ["Enabled", w.isEnabled === undefined ? null : String(w.isEnabled)],
+        ["Type", w.modelType ?? null],
         ["Job", w.jobSentence ?? null],
         ["Kit", w.kit?.slug ?? null],
         ["Readiness", w.readiness?.status ?? null],
         ["Running now", w.isRunning ? "yes" : null],
         ["Next run", w.schedules?.nextRunUtc ?? null],
       ]);
+      if (pending.length === 0) return detail;
+      return [
+        detail,
+        yellow(`Pending setup: ${sanitizeInline(pending.join(", "))} — blocks deploy and run.`),
+        `Answer with \`wk instruction set ${w.tokenId} --answers '{"key":"value"}'\`.`,
+      ].join("\n");
     },
   });
 

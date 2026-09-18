@@ -4,6 +4,61 @@ All notable changes to `@workerkit/cli` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the package adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.3.0] - 2026-09-18
+
+### Added
+
+Parity with `@workerkit/core` 0.3.3 — decision workers, on the commands that already existed.
+
+- **`wk run`** gains `--preview` (report what this run would do and act on nothing),
+  `--source-args '{...}'` (narrow what is decided about), `--max-items` and `--wait-seconds`
+  (wait for the settled receipt and its per-item decisions instead of the freshly minted one).
+  Running a decision worker for real confirms first: its table acts on every item it routes.
+  A waited run prints what it decided — outcome, confidence, how many were acted on or fell
+  below the floor — rather than only the run id.
+- **`wk instruction get`** reads a decision worker's routing table, its install questions and
+  their answers, and `--options-for <key>` lists an app pick's live values from the worker's own
+  app. A pending question is called out where it is read, because it blocks both deploy and run.
+  **`wk instruction set --answers '{...}'`** fills or changes those answers — no stdin needed,
+  since a decision worker is set by its answers rather than by text.
+- **`wk workers get`** reports `Type` (language or decision) and any install question still
+  blank: the field that says which calls a worker will accept, and the reason a deploy or run is
+  refused.
+- **`wk deployment update <tokenId> --decision-mode preview|live`** — `live` (the default) acts;
+  `preview` makes every run report what it would do and act on nothing.
+- **`wk kit install --decision-answers '{...}'`** for a decision kit's install questions, with a
+  pre-install check that names the mandatory ones; **`wk kit search --model-type`** and a TYPE
+  column on the results.
+
+### Changed
+
+- **`wk instruction set`** no longer demands an instruction it will not send. `content` became
+  optional in core 0.3.3, so `--job-sentence`, `--when-to-use`, `--description`,
+  `--memory-profile` and `--self-facts-enabled` can now be changed on their own, without
+  resending the whole instruction or piping one in. A closed stdin is read as "no text" rather
+  than as an empty instruction, so the same call works unattended.
+
+### Fixed
+
+- **`wk run`** decided whether to confirm from the flags it was given, which was wrong in both
+  directions: `--wait-seconds` applies to any worker, so a plain language-worker run was met with
+  a decision-worker confirmation — and refused outright in a non-interactive session, where the
+  CLI declines to prompt. Meanwhile the invocation that acts on the most items, a bare
+  `wk run <tokenId>` against a live decision worker, was never confirmed at all. It now asks the
+  worker what it is (`modelType`) and confirms only a live decision run. The lookup fails open:
+  a key without `readWorkers`, a 404 or a dead network leaves `wk run` working exactly as before.
+
+### Internal
+
+- A coverage test over the hand-authored commands. Flags on a `mountTool` command are derived
+  from the core descriptor and cannot drift; the bespoke ones — `wk run`, `wk instruction set`,
+  `wk kit install`, the kit-authoring and secret-carrying writes — are hand-written, and every
+  gate in the repo stayed green while core 0.3.3's new parameters were simply unreachable. Each
+  schema key must now be reachable as a flag or a positional, or be named with the reason it is
+  not, so the next core bump fails loudly instead of silently.
+
 ## [0.2.1] - 2026-09-12
 
 ### Added

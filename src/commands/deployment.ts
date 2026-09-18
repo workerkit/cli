@@ -34,7 +34,7 @@ export function mountDeploy(program: Command): void {
   mountTool(deployment, "update", {
     tool: "deployment_update",
     positionals: ["tokenId"],
-    summary: "Change a live deployment (model, ceilings, transcript retention), or --action pause|resume",
+    summary: "Change a live deployment (model, ceilings, transcript retention, --decision-mode preview|live), or --action pause|resume",
   });
 
   mountTool(deployment, "remove", {

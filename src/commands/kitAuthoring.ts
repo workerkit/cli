@@ -256,7 +256,7 @@ export function mountKitAuthoring(kit: Command): void {
   // ── validate: the dry run ──────────────────────────────────────────────────────────────────
   const validate = kit
     .command("validate")
-    .description("Dry-run a publish: every gate's verdict at once, from --file or stdin")
+    .description("Dry-run a publish: every gate's verdict at once, from --file or stdin (a language kit's instruction or a decision kit's routing table — `wk kit guide --section index` says which)")
     .option("--file <path>", "The kit JSON (see `wk kit guide --section schema`); otherwise stdin")
     .option("--kit-ref <slug>", "Validate as a replacement of this owned listing");
   validate.action(async (options: Record<string, unknown>) => {
@@ -285,7 +285,7 @@ export function mountKitAuthoring(kit: Command): void {
   // ── publish: validate → confirm → publish ──────────────────────────────────────────────────
   const publish = kit
     .command("publish")
-    .description("Publish a NEW kit from --file or stdin (validates first, then confirms). Publish private first.")
+    .description("Publish a NEW kit from --file or stdin (validates first, then confirms). Publish private first. Language or decision kit: `wk kit guide --section index`.")
     .option("--file <path>", "The kit JSON: listing fields + content, or sourceWorkerId")
     .option("--private", "Publish as private (installable only by this account, no supply-chain scan)")
     .option("--public", "Publish to the directory (runs the fail-closed supply-chain scan)")

@@ -47,7 +47,7 @@ Alternatives:
 wk about [--section why]              # what WorkerKit is and when to use it, written for agents (anonymous)
 
 wk workers list [--status ...] [--deployed] [--readiness ...] [--q ...]   # your fleet, filterable
-wk workers get <tokenId>              # tokenId = the ID column in `wk workers list`
+wk workers get <tokenId>              # tokenId = the ID column in `wk workers list`; shows Type and any pending setup
 wk workers enable|disable <tokenId>
 wk workers delete <tokenId>           # permanent, takes sub-workers with it (`disable` is the reversible stop)
 wk workers permissions <tokenId>      # what it may touch, in the kit vocabulary (read-only)
@@ -57,8 +57,10 @@ wk workers budget|budget-set <tokenId> ...
 wk deploy <tokenId> [--model-slug ...]   # put a worker on the hosted runtime: what makes it run
 wk deployment list|get|update|remove <tokenId> ...
 wk deployment models                  # what this account may deploy on, priced
+wk deployment update <tokenId> --decision-mode preview|live   # a decision worker: preview = report only; live (the default) acts
 
 wk run <tokenId> [--prompt ...] [--follow]
+wk run <tokenId> [--preview] [--source-args '{...}'] [--max-items 20] [--wait-seconds 25]   # a decision worker's per-item decisions
 wk runs bulk --workers '[...]'        # one prompt across up to 20 workers (not atomic; read items[])
 wk runs list <tokenId> [--status ...]
 wk runs feed [--status ...]           # the account-wide feed (no per-worker fan-out)
@@ -76,14 +78,16 @@ wk account usage                      # plan, worker + hosted slots, wallet, req
 wk memory get|add|update|delete <tokenId> ...
 wk schedules list|create|update|delete <tokenId> ...
 wk deliveries list|channels|create|update|rotate-secret|delete <tokenId> ...
-wk instruction get|set <tokenId> [--file ...]
+wk instruction get <tokenId> [--options-for <key>]   # the instruction, or a decision worker's routing table
+wk instruction set <tokenId> [--file ...] [--answers '{...}']   # the text, or a decision worker's install answers
+wk instruction set <tokenId> --job-sentence '...'   # metadata alone: no instruction resent
 wk instruction versions|version|restore <tokenId> [versionNumber]
 
 wk kit search [--query ...] [--category ...]   # anonymous: works before sign-in
 wk kit get <slug>
 wk kit stats <slug>
 wk kit categories                     # the directory's filter vocabulary
-wk kit install <slug> [--preview]     # preview → confirm → install
+wk kit install <slug> [--preview]     # preview → confirm → install (a decision kit's questions: --decision-answers '{...}')
 wk kit tools [--app email]            # what a worker can do, app by app, with the keys that unlock each tool (anonymous)
 wk kit guide [--section schema]       # how to write a kit (anonymous)
 wk kit vocabulary [--app email]       # the live tool-key vocabulary (anonymous)
@@ -112,7 +116,10 @@ wk update                             # update the CLI itself
 Creating a worker from scratch is a two-step: `wk kit publish --file kit.json --private`, then
 `wk kit install <slug>`. A private kit is installable only by your account and goes through the
 same validators as a directory listing — that is the platform's rule for permissions authored by an
-agent. `wk kit tools`, `wk kit guide` and `wk kit vocabulary` are what to read first, and
+agent. A kit is a language kit (an instruction) or a decision kit (a routing table the decision
+model runs per item, `content.decisionSpec`, `wk kit search --model-type decision`); `wk kit guide
+--section index` says which a job is. A decision worker is read, answered and run through the same
+`wk instruction` and `wk run` commands as any other, with its own flags. `wk kit tools`, `wk kit guide` and `wk kit vocabulary` are what to read first, and
 `wk apps list` says which apps the worker will actually be able to reach: a worker only uses apps
 that are connected on its operator. `wk apps connect` connects the credential-based ones (bot
 tokens, API keys, private-app tokens); Google, Microsoft, GitHub and Reddit sign in on the

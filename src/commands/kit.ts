@@ -14,9 +14,26 @@ interface KitCard {
   name?: string | null;
   jobSentence?: string | null;
   publisherSlug?: string | null;
+  modelType?: string | null;
   downloads?: number | null;
   stars?: number | null;
 }
+
+// A decision kit's install questions (kit_install_preview decisionSetup): the ones an install
+// must answer are required with no default — except an appPick, whose options come from the
+// installer's own app and can be answered on the worker afterwards (wk instruction set --answers).
+interface DecisionSetupQuestion {
+  key?: string;
+  type?: string;
+  required?: boolean;
+  default?: unknown;
+}
+
+const mandatoryDecisionKeys = (questions: DecisionSetupQuestion[] | undefined): string[] =>
+  (questions ?? [])
+    .filter((q) => q.required && q.default === undefined && q.type !== "appPick")
+    .map((q) => q.key)
+    .filter((k): k is string => Boolean(k));
 
 export function mountKit(program: Command): void {
   const kit = program.command("kit").description("Browse the kit directory and install kits as workers");
@@ -37,6 +54,7 @@ export function mountKit(program: Command): void {
         { header: "SLUG", value: (k) => k.slug ?? "" },
         { header: "NAME", value: (k) => k.name ?? "", maxWidth: 30 },
         { header: "JOB", value: (k) => k.jobSentence ?? "", maxWidth: 48 },
+        { header: "TYPE", value: (k) => k.modelType ?? "language" },
         { header: "PUBLISHER", value: (k) => k.publisherSlug ?? "" },
         { header: "DL", value: (k) => String(k.downloads ?? "") },
       ]);
@@ -71,6 +89,10 @@ export function mountKit(program: Command): void {
     .option("--category-choices <json>", "One entry per preview categorySlots slot (JSON array)")
     .option("--inputs <json>", "Answers to the preview's requiredInputs (JSON object)")
     .option("--memory-answers <json>", "Answers to the preview's memorySetup questions (JSON object)")
+    .option(
+      "--decision-answers <json>",
+      "Decision kits: answers to the preview's decisionSetup questions by key (JSON object); an appPick may be answered later with wk instruction set --answers",
+    )
     .option("--preview", "Stop after showing the install preview");
   install.action(async (slug: string, options: Record<string, unknown>) => {
     const globals = globalOpts(install);
@@ -92,6 +114,8 @@ export function mountKit(program: Command): void {
 
     const previewBody = preview.data as {
       requiredInputs?: Array<{ key?: string; label?: string }>;
+      modelType?: string;
+      decisionSetup?: DecisionSetupQuestion[];
       appsNeedingConnection?: Array<{ app?: string } | string>;
       limits?: { currentWorkers?: number; maxWorkers?: number };
     };
@@ -109,6 +133,14 @@ export function mountKit(program: Command): void {
       process.stdout.write(`${bold(`Installing kit ${slug}`)}\n`);
       if (required.length > 0)
         process.stdout.write(`Required inputs: ${sanitizeInline(required.join(", "))} (pass via --inputs '{...}')\n`);
+      if (previewBody.modelType === "decision") {
+        const questions = (previewBody.decisionSetup ?? []).map((q) => q.key ?? "?");
+        process.stdout.write("Decision kit: no model to pick.\n");
+        if (questions.length > 0)
+          process.stdout.write(
+            `Decision setup questions: ${sanitizeInline(questions.join(", "))} (pass via --decision-answers '{...}')\n`,
+          );
+      }
       if (needing.length > 0)
         process.stdout.write(
           `${yellow("Apps needing connection after install:")} ${sanitizeInline(needing.join(", "))}\n`,
@@ -138,6 +170,17 @@ export function mountKit(program: Command): void {
       process.exitCode = 2;
       return;
     }
+    const decisionAnswers = safeJson(options.decisionAnswers) as Record<string, unknown> | null;
+    const missingDecision = mandatoryDecisionKeys(previewBody.decisionSetup).filter(
+      (k) => !decisionAnswers || decisionAnswers[k] === undefined,
+    );
+    if (missingDecision.length > 0) {
+      process.stderr.write(
+        `Missing decision answers: ${missingDecision.join(", ")}. Pass them with --decision-answers '{"key":"value",...}'.\n`,
+      );
+      process.exitCode = 2;
+      return;
+    }
 
     if (!(await confirm(`Install ${slug} as a new worker?`, globals.yes))) {
       if (!process.exitCode) process.exitCode = 2;
@@ -154,6 +197,7 @@ export function mountKit(program: Command): void {
     if (inputs) installParams.inputs = inputs;
     const memoryAnswers = safeJson(options.memoryAnswers);
     if (memoryAnswers) installParams.memoryAnswers = memoryAnswers;
+    if (decisionAnswers) installParams.decisionAnswers = decisionAnswers;
 
     const result = await executeTool(client, installDescriptor, installParams, { token });
     if (!isSuccess(result)) {
