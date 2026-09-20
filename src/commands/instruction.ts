@@ -17,7 +17,6 @@ export function mountInstruction(program: Command): void {
       const body = data as {
         content?: string;
         narration?: string;
-        decisionMode?: string;
         setup?: Array<{ key?: string; label?: string; answer?: unknown; type?: string }>;
         pendingSetup?: string[];
       };
@@ -28,14 +27,6 @@ export function mountInstruction(program: Command): void {
       // pendingSetup blocks both deploy and run, so it is the line that must not be buried.
       if (typeof body.narration !== "string") return null;
       const lines = [sanitizeText(body.narration)];
-      if (body.decisionMode) {
-        lines.push(
-          "",
-          body.decisionMode === "preview"
-            ? `${bold("Mode:")} preview — runs report what they would do and act on nothing.`
-            : `${bold("Mode:")} live — the routing table acts.`,
-        );
-      }
       if (Array.isArray(body.setup) && body.setup.length > 0) {
         lines.push("", bold("Install questions"));
         for (const q of body.setup) {

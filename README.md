@@ -41,6 +41,23 @@ Alternatives:
 > Only approve logins you started yourself. The approval page will always ask for the code shown
 > in **your** terminal.
 
+## Headless signup and funding
+
+```sh
+wk auth login --start --no-browser --json --scopes readWorkers,readRuns
+# Add --email person@example.com when the person requests email delivery.
+wk auth login --resume --json
+wk onboarding --json
+```
+
+The person can approve on another device. Signup and Google, Microsoft or email OTP sign-in happen on WorkerKit's approval page. An admin chooses the account, permissions and expiry; defaults are read-only and 30 days. Start prints the approval URL, user code and deadline. Pending credentials stay in the protected config directory; resume with the same directory and `--name` profile. Resume checks once; wait at least five seconds between checks. On a lost redemption response, `wk auth login --cancel` revokes that request's key before fresh approval. Never put OTPs, provider keys or fleet keys in an agent transcript.
+
+Runtime permissions require a human-approved account ceiling, shared by all workers and schedules. `wk onboarding --json` reports `spendPolicy`: daily/monthly limits and reserved allowance. A run reserves its model ceiling plus possible BYOK fees until the UTC window resets, even if it costs less or fails. Agents cannot raise this ceiling. Metered app charges are separate.
+
+`wk wallet balance --json` requires `readWallet`. With permission for the amount and `requestWalletTopUp`, `wk wallet checkout --amount-usd 20 --idempotency-key purchase-1 --json` returns the credit, fee, total and Stripe Checkout link. The person pays. Reuse the same idempotency key and amount on retries. Inspect `wk wallet checkout-status <sessionId> --json`: only `credited` confirms committed funds. No saved-card charging is exposed.
+
+For BYOK, give the person the Settings URL and account from `wk onboarding`. A provider key already in protected storage can use the existing `wk model-keys` secret-input flow with `manageConnections`. BYOK can still incur platform or app fees. Check worker readiness, deployment and budgets before a run. Revoking agent access does not pause existing scheduled workers.
+
 ## Commands
 
 ```
@@ -57,10 +74,9 @@ wk workers budget|budget-set <tokenId> ...
 wk deploy <tokenId> [--model-slug ...]   # put a worker on the hosted runtime: what makes it run
 wk deployment list|get|update|remove <tokenId> ...
 wk deployment models                  # what this account may deploy on, priced
-wk deployment update <tokenId> --decision-mode preview|live   # a decision worker: preview = report only; live (the default) acts
 
 wk run <tokenId> [--prompt ...] [--follow]
-wk run <tokenId> [--preview] [--source-args '{...}'] [--answers '{...}'] [--max-items 20] [--wait-seconds 25]   # a decision worker's per-item decisions; --answers = per-run install answers, never saved
+wk run <tokenId> [--source-args '{...}'] [--answers '{...}'] [--max-items 20] [--wait-seconds 25]   # a decision worker's per-item decisions; --answers = per-run install answers, never saved
 wk runs bulk --workers '[...]'        # one prompt across up to 20 workers (not atomic; read items[])
 wk runs list <tokenId> [--status ...]
 wk runs feed [--status ...]           # the account-wide feed (no per-worker fan-out)
@@ -91,6 +107,9 @@ wk kit install <slug> [--preview]     # preview → confirm → install (a decis
 wk kit tools [--app email]            # what a worker can do, app by app, with the keys that unlock each tool (anonymous)
 wk kit guide [--section schema]       # how to write a kit (anonymous)
 wk kit vocabulary [--app email]       # the live tool-key vocabulary (anonymous)
+wk decision sources [--app email]    # supported classification sources, grants and request examples
+wk decision guide                    # focused authoring guide (anonymous)
+wk decision create --file decision.json --json   # private kit + worker; optional deploy, never runs
 wk kit validate --file kit.json       # every gate's verdict at once
 wk kit publish --file kit.json --private   # validate → confirm → publish
 wk kit replace <slug> --file kit.json [--public]
@@ -108,12 +127,27 @@ wk mcp-servers create <name> <url> --auth-type Bearer   # register + credential 
 wk mcp-servers discover|delete <handle>
 wk mcp-servers set-tools <handle> <toolId...>   # enabling ≥1 tool publishes the server
 
+wk onboarding [--provider <slug>]
+wk wallet balance
+wk wallet checkout --amount-usd <amount> --idempotency-key <key>
+wk wallet checkout-status <sessionId>
+
 wk auth key-info                      # what the current key is and its scopes
+wk auth login [--start|--resume|--cancel] [--no-browser] [--email <address>]
 wk auth status|logout|profiles|use
 wk update                             # update the CLI itself
 ```
 
-Creating a worker from scratch is a two-step: `wk kit publish --file kit.json --private`, then
+For classification, start with `wk decision sources --app email` and `wk decision guide`.
+Put a recipe, typed questions, `confidenceFloor` and a unique `requestId` in a JSON file,
+then call `wk decision create --file decision.json --json` (piped JSON also works).
+This creates a private kit and worker through the normal lifecycle. `deploy:true` optionally
+deploys it; creation never runs it. Follow the returned `nextCall`, then use `wk run`.
+Creation requires `publishKits` + `installKits`; deployment additionally needs
+`manageDeployments`. Reuse the same request ID and identical body after a timeout.
+The initial sources are email previews, calendar events and Google Sheets rows.
+
+General worker authoring is a two-step: `wk kit publish --file kit.json --private`, then
 `wk kit install <slug>`. A private kit is installable only by your account and goes through the
 same validators as a directory listing — that is the platform's rule for permissions authored by an
 agent. A kit is a language kit (an instruction) or a decision kit (a routing table the decision

@@ -15,6 +15,8 @@ import { mountDeploy } from "./commands/deployment.js";
 import { mountApps, mountModelKeys } from "./commands/apps.js";
 import { mountMcpServers } from "./commands/mcpServers.js";
 import { mountUpdate } from "./commands/update.js";
+import { mountDecision } from "./commands/decision.js";
+import { mountOnboarding } from "./commands/onboarding.js";
 
 export function buildProgram(): Command {
   const program = new Command("wk");
@@ -56,6 +58,8 @@ export function buildProgram(): Command {
   mountModelKeys(program);
   mountMcpServers(program);
   mountUpdate(program);
+  mountDecision(program);
+  mountOnboarding(program);
 
   return program;
 }

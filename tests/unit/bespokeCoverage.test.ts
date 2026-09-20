@@ -35,7 +35,11 @@ const kitBodyFields = (...keys: string[]): Record<string, string> =>
   Object.fromEntries(keys.map((k) => [k, KIT_BODY]));
 
 const BESPOKE: Record<string, BespokeCommand> = {
-  worker_run: { path: "run", aliases: { modelSlug: "model" } },
+  decision_worker_create: { path: "decision create", offFlag: kitBodyFields("requestId", "name", "source", "questions", "confidenceFloor", "maxItems", "operatorId", "deploy", "maxUsdPerRun", "maxUsdPerDay") },
+  worker_run: {
+    path: "run",
+    aliases: { modelSlug: "model" },
+  },
 
   run_score: { path: "runs score" },
 

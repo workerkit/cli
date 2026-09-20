@@ -126,12 +126,18 @@ export async function startLogin(
 /** Best-effort browser open; the URL is always printed too (SSH/headless). */
 export function openBrowser(url: string): void {
   try {
+    if (!["https:", "http:"].includes(new URL(url).protocol)) return;
+    const launch = (command: string, args: string[]) => {
+      const child = spawn(command, args, { detached: true, stdio: "ignore", windowsHide: true });
+      child.on("error", () => {}); // The printed URL remains usable when no browser is installed.
+      child.unref();
+    };
     if (process.platform === "win32") {
-      spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" }).unref();
+      launch("rundll32.exe", ["url.dll,FileProtocolHandler", url]);
     } else if (process.platform === "darwin") {
-      spawn("open", [url], { detached: true, stdio: "ignore" }).unref();
+      launch("open", [url]);
     } else {
-      spawn("xdg-open", [url], { detached: true, stdio: "ignore" }).unref();
+      launch("xdg-open", [url]);
     }
   } catch {
     // The printed URL is the fallback.

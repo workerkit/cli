@@ -12,15 +12,16 @@
  */
 
 import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 export const ENV_KEY = "WK_MANAGER_KEY";
 const KEYCHAIN_SERVICE = "workerkit-cli";
 
 export interface ProfileRecord {
   storage: "keychain" | "file";
+  keychainService?: string;
 }
 
 export interface CliConfig {
@@ -38,6 +39,11 @@ export function configDir(): string {
 
 const configPath = () => join(configDir(), "config.json");
 const credentialsPath = () => join(configDir(), "credentials.json");
+// Separate explicit config roots, including tests, in the OS keychain as well as on disk.
+// Old records without this metadata still resolve their original keychain service.
+const credentialService = () => process.env.WK_CONFIG_DIR
+  ? `${KEYCHAIN_SERVICE}:${createHash("sha256").update(resolve(configDir())).digest("hex").slice(0, 20)}`
+  : KEYCHAIN_SERVICE;
 
 export function readConfig(): CliConfig {
   try {
@@ -71,7 +77,7 @@ function readCredentialsFile(): CredentialsFile {
  * Atomic write: temp file in the same directory, then rename. 0600 on POSIX; on Windows the
  * directory inherits the user-scoped %APPDATA% ACL (and the keychain path is preferred anyway).
  */
-function atomicWriteJson(path: string, value: unknown): void {
+export function writePrivateJson(path: string, value: unknown): void {
   mkdirSync(configDir(), { recursive: true, mode: 0o700 });
   const tmp = `${path}.${randomBytes(6).toString("hex")}.tmp`;
   writeFileSync(tmp, JSON.stringify(value, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
@@ -82,6 +88,8 @@ function atomicWriteJson(path: string, value: unknown): void {
   }
   renameSync(tmp, path);
 }
+
+const atomicWriteJson = writePrivateJson;
 
 // ── Keychain (lazy — the native module may be absent or the daemon unreachable) ────────────────
 
@@ -125,7 +133,7 @@ export async function resolveCredential(profileName?: string): Promise<ResolvedC
     const Entry = await keyring();
     if (Entry) {
       try {
-        const key = new Entry(KEYCHAIN_SERVICE, name).getPassword();
+        const key = new Entry(record.keychainService ?? KEYCHAIN_SERVICE, name).getPassword();
         if (key) return { key, source: "keychain", profile: name };
       } catch {
         // Entry vanished (user cleared the keychain) — fall through to null, do not guess.
@@ -143,11 +151,12 @@ export async function resolveCredential(profileName?: string): Promise<ResolvedC
 export async function storeCredential(profileName: string, key: string): Promise<"keychain" | "file"> {
   const config = readConfig();
   let storage: "keychain" | "file" = "file";
+  const service = credentialService();
 
   const Entry = await keyring();
   if (Entry) {
     try {
-      new Entry(KEYCHAIN_SERVICE, profileName).setPassword(key);
+      new Entry(service, profileName).setPassword(key);
       storage = "keychain";
     } catch {
       storage = "file";
@@ -160,7 +169,10 @@ export async function storeCredential(profileName: string, key: string): Promise
     atomicWriteJson(credentialsPath(), creds);
   }
 
-  config.profiles[profileName] = { storage };
+  config.profiles[profileName] = {
+    storage,
+    ...(storage === "keychain" && service !== KEYCHAIN_SERVICE ? { keychainService: service } : {}),
+  };
   config.activeProfile = profileName;
   writeConfig(config);
   return storage;
@@ -175,7 +187,7 @@ export async function deleteCredential(profileName: string): Promise<void> {
     const Entry = await keyring();
     if (Entry) {
       try {
-        new Entry(KEYCHAIN_SERVICE, profileName).deletePassword();
+        new Entry(record.keychainService ?? KEYCHAIN_SERVICE, profileName).deletePassword();
       } catch {
         // Already gone.
       }

@@ -6,6 +6,30 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-20
+
+### Added
+
+- Added resumable headless account approval (`auth login --start/--resume/--cancel --json`),
+  browser/email handoff, protected pending requests, and one-time key storage.
+- Added `wk onboarding` and wallet balance, checkout, and checkout-status commands through
+  `@workerkit/core` 0.3.7.
+- Added `wk decision sources`, `guide`, and `create` (`--file` or stdin) through
+  `@workerkit/core` 0.3.7.
+
+### Changed
+
+- Isolated OS keychain entries when `WK_CONFIG_DIR` is set, preserving existing profiles.
+- JSON auth status now reports nonsecret credential metadata.
+
+### Removed
+
+- **`wk run --preview`** and **`wk deployment update --decision-mode`** — Preview
+  mode was removed from the platform: every decision run is live and its routing table's
+  actions execute. `wk run`
+  still confirms before running a decision worker; `wk instruction get` no
+  longer prints a mode line.
+
 ## [0.3.0] - 2026-09-18
 
 ### Added

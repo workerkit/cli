@@ -1,6 +1,6 @@
 {
   "name": "@workerkit/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "WorkerKit CLI: manage your AI workers and browse the kit directory from the terminal",
   "keywords": [
     "workerkit",
@@ -48,13 +48,13 @@
   },
   "dependencies": {
     "@napi-rs/keyring": "1.1.9",
-    "@workerkit/core": "0.3.4",
+    "@workerkit/core": "0.3.7",
     "commander": "13.0.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1",
     "tsx": "4.20.3",
     "typescript": "5.9.3",
-    "vitest": "3.2.7"
+    "vitest": "4.1.11"
   }
 }

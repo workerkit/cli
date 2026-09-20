@@ -12,7 +12,7 @@ import { sanitizeInline } from "../output/sanitize.js";
  * hand off to the tail loop. A policy-skipped run is HTTP 200 with status "skipped"/"Skipped": a
  * receipt, not an error — exit 0 and say why (agents branch on --json).
  *
- * A decision worker runs its routing table here too: --preview reports without acting,
+ * A decision worker runs its routing table here too, and acts on every item it routes:
  * --source-args narrows what is decided about, --max-items caps it, and --wait-seconds waits for
  * the settled receipt and its per-item decisions.
  */
@@ -24,6 +24,10 @@ interface DecisionRow {
 }
 
 interface DecisionBlock {
+  mode?: "item" | "corpus";
+  aboveFloorPercent?: number;
+  counts?: { fetched: number; submitted: number; returned: number; omitted: number; notAttempted: number };
+  source?: { state?: string; complete?: boolean | null; hasMore?: boolean };
   outcome?: string;
   confidence?: number;
   model?: string;
@@ -42,8 +46,8 @@ interface DecisionBlock {
  * worker what it is: modelType is the field core points at for exactly this.
  *
  * Fail-open. A key without readWorkers, a 404, or a dead network must not break `wk run`: the
- * server still refuses mismatched flags (409 not_language_worker / not_decision_worker) and the
- * deployment's own decisionMode still governs, so a missed prompt costs a prompt, not safety.
+ * server still refuses mismatched flags (409 not_language_worker / not_decision_worker), so a
+ * missed prompt costs a prompt.
  */
 async function isDecisionWorker(tokenId: number, globals: GlobalOpts): Promise<boolean> {
   const descriptor = byName("worker_get");
@@ -65,14 +69,17 @@ function renderDecision(block: DecisionBlock): string[] {
   }
   const lines: string[] = [];
   if (typeof block.outcome === "string") lines.push(`${bold("Decision:")} ${sanitizeInline(block.outcome)}`);
-  if (typeof block.confidence === "number") lines.push(`Confidence: ${block.confidence}% of judged items above the floor`);
+  const floor = block.aboveFloorPercent ?? block.confidence;
+  if (typeof floor === "number") lines.push(`Above floor: ${floor}% of judged items`);
+  if (block.counts) lines.push(`${block.counts.submitted}/${block.counts.fetched} submitted; ${block.counts.notAttempted} not attempted; ${block.counts.returned} rows shown, ${block.counts.omitted} omitted.`);
+  if (block.source) lines.push(`Source: ${sanitizeInline(block.source.state ?? "unknown")}; coverage ${block.source.complete === true ? "complete" : block.source.complete === false ? "partial" : "unknown"}${block.source.hasMore ? "; more data available" : ""}.`);
 
   const rows = Array.isArray(block.decisions) ? block.decisions : [];
   if (rows.length > 0) {
     const acted = rows.filter((r) => r.executed).length;
     const failed = rows.filter((r) => r.executed && r.ok === false).length;
     const belowFloor = rows.filter((r) => r.route === "below_floor").length;
-    const parts = [`${rows.length} judged`];
+    const parts = [`${rows.length} ${block.mode === "corpus" ? "finalist" : "result"} rows shown`];
     if (acted > 0) parts.push(`${acted} acted on`);
     if (belowFloor > 0) parts.push(`${belowFloor} below the floor`);
     if (failed > 0) parts.push(yellow(`${failed} failed`));
@@ -100,7 +107,6 @@ export function mountRun(program: Command): void {
     .argument("<tokenId>")
     .option("-p, --prompt <text>", "Language workers: extra instruction for this run only (<=8000 chars)")
     .option("--model <slug>", "Language workers: override the model for this run")
-    .option("--preview", "Decision workers: report what this run WOULD do and act on nothing")
     .option("--source-args <json>", "Decision workers: narrow what is decided about (JSON object, merged over the spec's source args)")
     .option("--answers <json>", "Decision workers: per-run answers to the install questions (JSON object of key → value, laid over the stored answers for this run only)")
     .option("--max-items <n>", "Decision workers: judge at most this many items this run")
@@ -109,7 +115,7 @@ export function mountRun(program: Command): void {
 
   cmd.action(async (tokenId: string, options: {
     prompt?: string; model?: string; follow?: boolean;
-    preview?: boolean; sourceArgs?: string; answers?: string; maxItems?: string; waitSeconds?: string;
+    sourceArgs?: string; answers?: string; maxItems?: string; waitSeconds?: string;
   }) => {
     const globals = globalOpts(cmd);
     const descriptor = byName("worker_run");
@@ -118,7 +124,6 @@ export function mountRun(program: Command): void {
     const params: Record<string, unknown> = { tokenId: Number(tokenId) };
     if (options.prompt !== undefined) params.prompt = options.prompt;
     if (options.model !== undefined) params.modelSlug = options.model;
-    if (options.preview) params.preview = true;
     if (options.maxItems !== undefined) params.maxItems = Number(options.maxItems);
     if (options.waitSeconds !== undefined) params.waitSeconds = Number(options.waitSeconds);
     if (options.sourceArgs !== undefined) {
@@ -140,16 +145,12 @@ export function mountRun(program: Command): void {
       }
     }
 
-    // A decision worker asked to run for real acts on every item its table routes. Ask before
-    // that, and skip the lookup only where it could change nothing: --preview acts on nothing,
-    // --prompt/--model are language-only (the server 409s them on a decision worker), and --yes
-    // is a standing yes.
-    const couldAct =
-      !options.preview && options.prompt === undefined && options.model === undefined && !globals.yes;
+    // A decision worker acts on every item its table routes. Ask before that, and skip the
+    // lookup only where it could change nothing: --prompt/--model are language-only (the server
+    // 409s them on a decision worker), and --yes is a standing yes.
+    const couldAct = options.prompt === undefined && options.model === undefined && !globals.yes;
     if (couldAct && (await isDecisionWorker(Number(tokenId), globals))) {
-      const question =
-        `Run decision worker ${tokenId} for real? Its routing table acts on every item it routes ` +
-        `(--preview reports without acting).`;
+      const question = `Run decision worker ${tokenId}? Its routing table acts on every item it routes.`;
       if (!(await confirm(question, globals.yes))) {
         if (!process.exitCode) process.exitCode = 2;
         return;
@@ -163,7 +164,7 @@ export function mountRun(program: Command): void {
       {
         tool: "worker_run",
         positionals: ["tokenId"],
-        hidden: ["prompt", "modelSlug", "preview", "sourceArgs", "answers", "maxItems", "waitSeconds"],
+        hidden: ["prompt", "modelSlug", "sourceArgs", "answers", "maxItems", "waitSeconds"],
         render: (data) => {
           const receipt = data as {
             runId?: string;

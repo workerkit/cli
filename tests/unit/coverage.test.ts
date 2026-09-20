@@ -11,6 +11,7 @@ import { mountedSpecs } from "../../src/bind.js";
 
 // Tools wired through bespoke commands (runTool/executeTool directly) rather than mountTool.
 const BESPOKE_TOOLS = [
+  "decision_worker_create",
   "worker_run", "run_score", "instruction_set", "kit_install_preview", "kit_install",
   // The kit-authoring writes read their body from a file or stdin, then validate → confirm → act.
   "kit_validate", "kit_publish", "kit_replace",

@@ -17,8 +17,17 @@ and [Terms of Service](https://workerkit.ai/terms).
 - The key is stored in your **OS keychain** (Windows Credential Manager, macOS Keychain, or the
   Secret Service on Linux) when one is available. Without a keychain it falls back to a file under
   your user config directory, written with owner-only permissions on POSIX systems.
+- Resumable login stores its request ID and polling secret in a private pending-request file in that
+  config directory. It uses owner-only permissions on POSIX; on Windows it inherits the directory's
+  user-scoped ACL. The polling secret is sent only in a request header and is never printed, placed
+  in a URL, or included in JSON output. `wk auth login --cancel` revokes any uncollected key before
+  removing the pending request.
+- When `WK_CONFIG_DIR` is set, keychain entries use a namespace derived from that directory so test,
+  automation, and normal profiles do not overwrite one another. Existing profiles retain their
+  original keychain namespace.
 - `WK_MANAGER_KEY` (environment variable) always takes precedence and is never written to disk.
 - The CLI never logs the key; debug traces redact `pe_mgr_` material.
+- `wk auth status --json` returns only nonsecret credential metadata and key information.
 
 ## What the CLI renders
 

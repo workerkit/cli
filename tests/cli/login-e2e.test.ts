@@ -7,10 +7,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * End-to-end sign-in against a stand-in server that speaks the real `api/auth/manager-cli`
+ * End-to-end sign-in against a stand-in server that speaks the real `api/auth/agent/requests`
  * contract. This is the half of the flow that lives in the CLI: start a session, display the
- * code, poll with the secret in the HEADER, collect the key exactly once, verify it before
- * persisting, and store it. The browser-side approval is simulated by the server flipping the
+ * code, poll with the secret in the HEADER, collect and persist the key exactly once, then verify
+ * it. The browser-side approval is simulated by the server flipping the
  * session to approved after the first poll.
  *
  * The assertions that matter are on what the CLI PUT ON THE WIRE: a regression there is
@@ -64,19 +64,19 @@ const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const path = url.pathname;
 
-    if (req.method === "POST" && path === "/api/auth/manager-cli/login") {
+    if (req.method === "POST" && path === "/api/auth/agent/requests") {
       recorded.loginBody = JSON.parse((await readBody(req)) || "{}") as Record<string, unknown>;
       return json(res, 200, {
-        sessionToken: SESSION_TOKEN,
+        requestId: SESSION_TOKEN,
         pollSecret: POLL_SECRET,
-        loginUrl: `http://127.0.0.1:${boundPort}/cli-auth-manager?session=${SESSION_TOKEN}`,
+        approvalUrl: `http://127.0.0.1:${boundPort}/cli-auth-manager?agent=${SESSION_TOKEN}`,
         userCode: USER_CODE,
         expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
         message: "",
       });
     }
 
-    if (req.method === "GET" && path === `/api/auth/manager-cli/poll/${SESSION_TOKEN}`) {
+    if (req.method === "GET" && path === `/api/auth/agent/requests/${SESSION_TOKEN}`) {
       recorded.pollCount++;
       recorded.pollAuthHeader = (req.headers["x-poll-secret"] as string) ?? null;
       recorded.pollQuery = url.search || null;
@@ -87,15 +87,21 @@ const server: Server = createServer((req, res) => {
       // First poll: still waiting on the human. Second: the admin has approved.
       if (recorded.pollCount < 2) return json(res, 200, { status: "pending" });
       return json(res, 200, {
-        status: "completed",
-        managerKey: MINTED_KEY,
-        keyId: 42,
-        keyName: "CLI - test",
-        scopes: ["readWorkers", "runWorkers"],
+        status: "approved",
+        expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
       });
     }
 
-    if (req.method === "GET" && path === "/api/manage/workers") {
+    if (req.method === "POST" && path === `/api/auth/agent/requests/${SESSION_TOKEN}/redeem`) {
+      if (req.headers["x-poll-secret"] !== POLL_SECRET) return json(res, 400, {});
+      return json(res, 200, {
+        status: "redeemed",
+        managerKey: MINTED_KEY,
+        keyId: 42,
+        scopes: ["readWorkers", "runWorkers"],
+      });
+    }
+    if (req.method === "GET" && (path === "/api/manage/workers/key-info" || path === "/api/manage/workers")) {
       recorded.verifyPath = path;
       recorded.verifyAuthHeader = (req.headers.authorization as string) ?? null;
       recorded.userAgent = (req.headers["user-agent"] as string) ?? null;
@@ -115,7 +121,12 @@ async function start(): Promise<void> {
   boundPort = typeof address === "object" && address ? address.port : 0;
 }
 
-afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
+afterAll(async () => {
+  // Remove only this temporary config root's namespaced keychain entries.
+  await wk(["auth", "logout", "--profile", "default"]);
+  await wk(["auth", "logout", "--profile", "json-agent"]);
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+});
 
 const configDir = mkdtempSync(join(tmpdir(), "wk-login-e2e-"));
 
@@ -164,14 +175,14 @@ describe.skipIf(!existsSync(DIST))("browser-approved sign-in, end to end", () =>
 
       // What the human sees: the code, prominently, plus the warning that does real work.
       expect(result.stdout).toContain(USER_CODE);
-      expect(result.stdout).toContain("cli-auth-manager?session=");
-      expect(result.stdout).toContain("Only approve this login if you started it yourself");
+      expect(result.stdout).toContain("cli-auth-manager?agent=");
+      expect(result.stdout).toContain("Only approve a request you started");
       expect(result.stdout).toContain("Signed in.");
       // The key itself must never be echoed.
       expect(result.stdout).not.toContain(MINTED_KEY);
 
       // What went on the wire at session start.
-      expect(recorded.loginBody?.supportsUserCode).toBe(true);
+      expect(recorded.loginBody?.scopes).toEqual(["readWorkers", "readRuns"]);
       expect(typeof recorded.loginBody?.clientLabel).toBe("string");
       expect((recorded.loginBody?.clientLabel as string).length).toBeGreaterThan(0);
 
@@ -181,8 +192,8 @@ describe.skipIf(!existsSync(DIST))("browser-approved sign-in, end to end", () =>
       expect(recorded.pollQuery).toBeNull();
       expect(recorded.pollCount).toBeGreaterThanOrEqual(2); // kept polling through "pending"
 
-      // Verify-before-persist: the minted key is exercised against a real endpoint first.
-      expect(recorded.verifyPath).toBe("/api/manage/workers");
+      // The one-time key is persisted, then exercised against a real endpoint.
+      expect(recorded.verifyPath).toBe("/api/manage/workers/key-info");
       expect(recorded.verifyAuthHeader).toBe(`Bearer ${MINTED_KEY}`);
       expect(recorded.userAgent).toMatch(/^WorkerKit-CLI\//);
 
@@ -206,4 +217,18 @@ describe.skipIf(!existsSync(DIST))("browser-approved sign-in, end to end", () =>
     },
     60_000,
   );
+  it("starts and resumes in separate JSON invocations without exposing either credential", async () => {
+    const start = await wk(["auth", "login", "--name", "json-agent", "--start", "--no-browser", "--json"]);
+    expect(start.status).toBe(0);
+    expect(JSON.parse(start.stdout).status).toBe("pending");
+    expect(start.stdout).not.toContain(POLL_SECRET);
+    const resumed = await wk(["auth", "login", "--name", "json-agent", "--resume", "--json"]);
+    expect(resumed.status).toBe(0);
+    expect(JSON.parse(resumed.stdout).status).toBe("signed_in");
+    expect(resumed.stdout).not.toContain(MINTED_KEY);
+    expect(resumed.stdout).not.toContain(POLL_SECRET);
+    const status = await wk(["auth", "status", "--json"]);
+    expect(JSON.parse(status.stdout).status).toBe("signed_in");
+    expect(status.stdout).not.toContain(MINTED_KEY);
+  });
 });
