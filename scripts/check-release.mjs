@@ -16,7 +16,7 @@ for (const [name, version] of Object.entries(pkg.dependencies)) {
 }
 const tag = process.argv[2] ?? (process.env.GITHUB_REF_TYPE === "tag" ? process.env.GITHUB_REF_NAME : undefined);
 if (tag) assert.equal(tag, `v${pkg.version}`, "Release tag must match package.json exactly");
-const changelog = readFileSync("CHANGELOG.md", "utf8");
+const changelog = readFileSync("CHANGELOG.md", "utf8").replace(/\r\n/g, "\n");
 assert.ok(changelog.startsWith("# Changelog\n"), "Changelog must start with its title");
 const sections = changelog.split(/^## /m);
 const matches = sections.filter(section => section.startsWith(`[${pkg.version}] - `));
