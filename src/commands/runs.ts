@@ -1,13 +1,14 @@
+import { renderHybridReceipt } from "../output/runReceipt.js";
 import type { Command } from "commander";
 import { byName, executeTool, isSuccess } from "@workerkit/core";
 import { mountTool, runTool, globalOpts } from "../bind.js";
 import { buildClient, requireToken } from "../context.js";
-import { renderApiError } from "../errors.js";
+import { classifyError, renderApiError } from "../errors.js";
 import { renderTable } from "../output/table.js";
 import { sanitizeInline, sanitizeText } from "../output/sanitize.js";
 import { bold, dim, green, red, yellow } from "../output/colors.js";
 
-const TERMINAL_STATUSES = new Set(["succeeded", "failed", "timedOut", "budgetExceeded", "skipped", "canceled"]);
+const TERMINAL_STATUSES = new Set(["succeeded", "failed", "timedout", "budgetexceeded", "skipped", "canceled", "awaitinginput"]);
 const TAIL_INTERVAL_MS = 4000; // inside the documented 3-5s cadence the run-events bucket is sized for
 
 interface RunRow {
@@ -24,9 +25,10 @@ interface RunRow {
 }
 
 function paintRunStatus(status: string): string {
-  if (status === "succeeded") return green(status);
-  if (status === "failed" || status === "timedOut" || status === "budgetExceeded") return red(status);
-  if (status === "running" || status === "dispatched" || status === "pending") return yellow(status);
+  const normalized = status.toLowerCase();
+  if (normalized === "succeeded") return green(status);
+  if (["failed", "timedout", "budgetexceeded"].includes(normalized)) return red(status);
+  if (["running", "dispatched", "pending", "awaitinginput"].includes(normalized)) return yellow(status);
   return status;
 }
 
@@ -60,6 +62,7 @@ export function mountRuns(program: Command): void {
     tool: "run_get",
     positionals: ["runId"],
     summary: "One run's full receipt",
+    render: renderHybridReceipt,
   });
 
   mountTool(runs, "events", {
@@ -163,6 +166,7 @@ interface RunEvent {
   seq?: number;
   kind?: string;
   message?: string | null;
+  label?: string | null;
   atUtc?: string | null;
 }
 
@@ -174,6 +178,8 @@ export async function tailRun(runId: string, json: boolean, profile?: string): P
   const eventsDescriptor = byName("run_events");
   const runDescriptor = byName("run_get");
   if (!eventsDescriptor || !runDescriptor) throw new Error("descriptors missing");
+  // Tail bypasses runTool, so validate before interpolating the id into paths or output.
+  runDescriptor.schema.runId!.parse(runId);
 
   const client = buildClient();
   const token = await requireToken(profile);
@@ -182,8 +188,10 @@ export async function tailRun(runId: string, json: boolean, profile?: string): P
   let cycles = 0;
   let transportBlips = 0;
   let interrupted = false;
+  const controller = new AbortController();
   const onSigint = () => {
     interrupted = true;
+    controller.abort();
   };
   process.once("SIGINT", onSigint);
 
@@ -194,11 +202,12 @@ export async function tailRun(runId: string, json: boolean, profile?: string): P
         return 130;
       }
 
-      const events = await executeTool(client, eventsDescriptor, { runId, afterSeq, limit: 200 }, { token });
+      const events = await executeTool(client, eventsDescriptor, { runId, afterSeq, limit: 200 }, { token, signal: controller.signal });
+      if (interrupted) continue;
 
       if (!isSuccess(events)) {
         // A 429 mid-tail is a pacing signal, not a failure: honor Retry-After and keep tailing.
-        if (events.status === 429) {
+        if (events.status === 429 && classifyError(events).code?.toUpperCase() !== "QUOTA_EXCEEDED") {
           const waitMs = events.quota.retryAfter ? events.quota.retryAfter * 1000 : TAIL_INTERVAL_MS * 2;
           await sleep(Math.min(waitMs, 30_000), () => interrupted);
           continue;
@@ -217,24 +226,30 @@ export async function tailRun(runId: string, json: boolean, profile?: string): P
         if (typeof event.seq === "number" && event.seq > afterSeq) afterSeq = event.seq;
         const line =
           `${dim(sanitizeInline(event.atUtc ?? ""))} ${bold(sanitizeInline(event.kind ?? "event"))} ` +
-          sanitizeInline(event.message ?? "");
+          sanitizeInline(event.label ?? event.message ?? "");
         if (json) process.stdout.write(JSON.stringify(event) + "\n");
         else process.stdout.write(line.trim() + "\n");
       }
 
       cycles++;
-      if (cycles % 3 === 0 || (body.events ?? []).length === 0) {
-        const run = await executeTool(client, runDescriptor, { runId }, { token });
+      if (cycles === 1 || cycles % 3 === 0 || (body.events ?? []).length === 0) {
+        const run = await executeTool(client, runDescriptor, { runId }, { token, signal: controller.signal });
+        if (interrupted) continue;
+        if (!isSuccess(run)) return renderApiError(run, json);
         if (isSuccess(run)) {
           const receipt = run.data as { status?: string; finalDigest?: string | null; ownerScore?: number | null };
           const status = sanitizeInline(receipt.status ?? "");
-          if (TERMINAL_STATUSES.has(status)) {
+          const normalized = status.toLowerCase();
+          if (TERMINAL_STATUSES.has(normalized)) {
             if (json) process.stdout.write(JSON.stringify(run.data) + "\n");
             else {
               process.stdout.write(`\n${bold("Run settled:")} ${paintRunStatus(status)}\n`);
-              if (receipt.finalDigest) process.stdout.write(`${sanitizeText(String(receipt.finalDigest))}\n`);
+              const hybrid = renderHybridReceipt(run.data);
+              if (hybrid) process.stdout.write(hybrid + "\n");
+              else if (receipt.finalDigest) process.stdout.write(`${sanitizeText(String(receipt.finalDigest))}\n`);
+              if (normalized === "awaitinginput") process.stdout.write(`Read the question with: wk runs question ${runId}\n`);
             }
-            return status === "succeeded" || status === "skipped" ? 0 : 1;
+            return ["succeeded", "skipped", "awaitinginput"].includes(normalized) ? 0 : 1;
           }
         }
       }

@@ -33,7 +33,9 @@ and [Terms of Service](https://workerkit.ai/terms).
 
 API responses can contain text produced by AI workers. Everything rendered to a terminal is
 stripped of escape sequences, control characters, and bidirectional-override characters.
-`--json` output is byte-faithful by design, because it is meant for pipes, not terminals.
+`--json` preserves API data before display transformations (JSON formatting can differ from
+the original response bytes). It is intended for pipes and preserves control characters
+as JSON escapes.
 
 ## Telemetry
 

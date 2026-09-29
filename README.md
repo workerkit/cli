@@ -7,7 +7,7 @@
 
 Manage your [WorkerKit](https://workerkit.ai) AI workers and browse the kit directory from the
 terminal. Every command is bound to the same tool definitions the WorkerKit MCP server exposes
-to AI agents, so the CLI, the MCP surface and the API cannot drift apart.
+to AI agents, with shared schemas and contract tests keeping their request formats aligned.
 
 ## Install
 
@@ -150,8 +150,9 @@ The initial sources are email previews, calendar events and Google Sheets rows.
 General worker authoring is a two-step: `wk kit publish --file kit.json --private`, then
 `wk kit install <slug>`. A private kit is installable only by your account and goes through the
 same validators as a directory listing — that is the platform's rule for permissions authored by an
-agent. A kit is a language kit (an instruction) or a decision kit (a routing table the decision
-model runs per item, `content.decisionSpec`, `wk kit search --model-type decision`); `wk kit guide
+agent. A kit can be a language kit (an instruction), a decision kit (a routing table), or a
+hybrid kit (classification followed by one language-model agent). Use
+`wk kit search --model-type decision` or `--model-type hybrid` to narrow discovery; `wk kit guide
 --section index` says which a job is. A decision worker is read, answered and run through the same
 `wk instruction` and `wk run` commands as any other, with its own flags. `wk kit tools`, `wk kit guide` and `wk kit vocabulary` are what to read first, and
 `wk apps list` says which apps the worker will actually be able to reach: a worker only uses apps
@@ -200,9 +201,10 @@ Credentials are stored in your OS keychain when available, falling back to a `06
 ```bash
 git clone https://github.com/workerkit/cli.git && cd cli
 npm ci
-npm test            # unit suites + golden contract + an end-to-end sign-in against a local stand-in server
 npm run typecheck
-npm run build       # dist/, which `node dist/index.js` runs directly
+npm run build       # required before the CLI end-to-end tests
+npm test            # unit and command contracts against local stand-in servers
+npm run test:package # install the tarball in a temporary directory and smoke-test wk
 ```
 
 Issues and pull requests are welcome. Commands are generated from the shared
@@ -225,3 +227,11 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 This CLI is released under the [MIT License](LICENSE). That covers the software itself; using it
 against WorkerKit's hosted API is separately governed by the Terms of Service above.
+
+### Classify then act
+
+A hybrid worker keeps its language instruction and a schema-3 classifier. Use `wk instruction get <tokenId>` to read both sections and the classifier revision. Attach with `wk decision set <tokenId> --decision-spec '<JSON>' --answers '{}' --updated-at null`; replace using the exact current revision, or remove with `--decision-spec null --updated-at '<revision>'`. Protected raw specs remain unavailable for replacement.
+
+`wk run` accepts source arguments, setup-answer overrides and a source cap alongside a language prompt/model. A waited receipt shows classification, one agent stage, confirmed draft references, separate model usage and the actual wallet charge. `--json` retains the full receipt. Hybrid runs are on demand. Recurring drafts and automatic retries of uncertain writes are unsupported.
+
+Hybrid availability depends on the connected server. An unavailable feature returns the server error; the CLI does not emulate classification or retry uncertain actions.

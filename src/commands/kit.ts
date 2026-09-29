@@ -133,7 +133,7 @@ export function mountKit(program: Command): void {
       process.stdout.write(`${bold(`Installing kit ${slug}`)}\n`);
       if (required.length > 0)
         process.stdout.write(`Required inputs: ${sanitizeInline(required.join(", "))} (pass via --inputs '{...}')\n`);
-      if (previewBody.modelType === "decision") {
+      if ((previewBody.modelType === "decision" || previewBody.modelType === "hybrid")) {
         const questions = (previewBody.decisionSetup ?? []).map((q) => q.key ?? "?");
         process.stdout.write("Decision kit: no model to pick.\n");
         if (questions.length > 0)

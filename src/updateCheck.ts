@@ -26,14 +26,12 @@ export async function maybeNudgeUpdate(): Promise<void> {
     config.lastUpdateCheck = new Date().toISOString();
     writeConfig(config);
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), BUDGET_MS);
-    const res = await fetch(REGISTRY_URL, { signal: controller.signal, redirect: "error" });
-    clearTimeout(timer);
+    // Keep the deadline active while consuming the body, not just until headers arrive.
+    const res = await fetch(REGISTRY_URL, { signal: AbortSignal.timeout(BUDGET_MS), redirect: "error" });
     if (!res.ok) return;
     const body = (await res.json()) as { version?: string };
     const latest = body.version;
-    if (latest && latest !== cliVersion() && isNewer(latest, cliVersion())) {
+    if (typeof latest === "string" && /^\d+\.\d+\.\d+$/.test(latest) && isNewer(latest, cliVersion())) {
       process.stderr.write(dim(`\nA new version of wk is available (${cliVersion()} -> ${latest}). Run: wk update\n`));
     }
   } catch {

@@ -14,19 +14,30 @@ export function mountInstruction(program: Command): void {
     positionals: ["tokenId"],
     summary: "Show the worker's instruction, or a decision worker's routing table and install questions (--options-for <key> lists an app pick's live values)",
     render: (data) => {
-      const body = data as {
+      let body = data as {
+        modelType?: string;
+        instruction?: { content?: string; isProtected?: boolean };
+        decision?: Record<string, unknown>;
         content?: string;
         narration?: string;
         setup?: Array<{ key?: string; label?: string; answer?: unknown; type?: string }>;
         pendingSetup?: string[];
       };
       if (!body || typeof body !== "object") return null;
+      const prefix: string[] = [];
+      if (body.modelType === 'hybrid') {
+        prefix.push(bold('Language instruction'), body.instruction?.isProtected ? 'Protected instruction' : sanitizeText(body.instruction?.content ?? 'No instruction content'), '', bold('Classification'));
+        body = (body.decision ?? {}) as typeof body;
+      }
       // A language worker: the instruction text, as before.
       if (typeof body.content === "string") return sanitizeText(body.content);
       // A decision worker: the table as sentences, then the install questions and their answers.
       // pendingSetup blocks both deploy and run, so it is the line that must not be buried.
-      if (typeof body.narration !== "string") return null;
-      const lines = [sanitizeText(body.narration)];
+      if (typeof body.narration !== "string") {
+        // Structured narration is the dashboard DTO; preserve it when the server uses that shape.
+        return prefix.length ? [...prefix, sanitizeText(JSON.stringify(body, null, 2))].join("\n") : null;
+      }
+      const lines = [...prefix, sanitizeText(body.narration)];
       if (Array.isArray(body.setup) && body.setup.length > 0) {
         lines.push("", bold("Install questions"));
         for (const q of body.setup) {
@@ -60,7 +71,7 @@ export function mountInstruction(program: Command): void {
     positionals: ["tokenId", "versionNumber"],
     summary: "One earlier version's text (protected kits refuse)",
     render: (data) => {
-      const body = data as { content?: string };
+      let body = data as { content?: string };
       if (body && typeof body.content === "string") return sanitizeText(body.content);
       return null;
     },

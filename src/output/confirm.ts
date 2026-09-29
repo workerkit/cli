@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
 import { bold } from "./colors.js";
+import { sanitizeInline } from "./sanitize.js";
 
 /**
  * Destructive-action confirmation. `--yes` bypasses; a non-TTY without `--yes` refuses with exit
@@ -16,7 +17,7 @@ export async function confirm(question: string, yes: boolean): Promise<boolean> 
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const answer = await new Promise<string>((resolve) => rl.question(`${bold(question)} [y/N] `, resolve));
+    const answer = await new Promise<string>((resolve) => rl.question(`${bold(sanitizeInline(question))} [y/N] `, resolve));
     return /^y(es)?$/i.test(answer.trim());
   } finally {
     rl.close();

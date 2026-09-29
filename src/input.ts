@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { sanitizeInline } from "./output/sanitize.js";
 
 /**
  * Input that is too large or too secret for a flag: kit bodies, instruction text, credentials.
@@ -88,11 +87,11 @@ export async function readCredential(
   options: Record<string, unknown>,
   promptFields: string[],
 ): Promise<Record<string, unknown> | null> {
-  const fields: Record<string, unknown> = {};
+  const fields: Record<string, unknown> = Object.create(null);
   for (const pair of (options.field as string[] | undefined) ?? []) {
     const eq = pair.indexOf("=");
     if (eq <= 0) {
-      process.stderr.write(`--field expects name=value, got "${sanitizeInline(pair)}".\n`);
+      process.stderr.write("--field expects name=value.\n");
       process.exitCode = 2;
       return null;
     }

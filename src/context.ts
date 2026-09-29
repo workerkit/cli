@@ -2,6 +2,7 @@ import { WorkerKitClient } from "@workerkit/core";
 import { resolveCredential, ENV_KEY } from "./auth/store.js";
 import { userAgent } from "./version.js";
 import { yellow } from "./output/colors.js";
+import { sanitizeInline } from "./output/sanitize.js";
 
 export const DEFAULT_API_BASE = "https://api.workerkit.ai";
 
@@ -18,14 +19,24 @@ export function apiBaseUrl(): string {
 }
 
 let warnedOverride = false;
+const clients = new Set<WorkerKitClient>();
 
 export function buildClient(): WorkerKitClient {
   const base = apiBaseUrl();
+  const client = new WorkerKitClient({ baseUrl: base, userAgent: userAgent() });
+  clients.add(client);
   if (base !== DEFAULT_API_BASE && !warnedOverride && process.stderr.isTTY) {
     warnedOverride = true;
-    process.stderr.write(yellow(`Using API base ${base} (WK_API_BASE_URL)\n`));
+    process.stderr.write(yellow(`Using API base ${sanitizeInline(new URL(base).origin)} (WK_API_BASE_URL)\n`));
   }
-  return new WorkerKitClient({ baseUrl: base, userAgent: userAgent() });
+  return client;
+}
+
+/** Release every command's pool, including lookups performed before a mutation. */
+export async function closeClients(): Promise<void> {
+  const pending = [...clients];
+  clients.clear();
+  await Promise.all(pending.map(client => client.close()));
 }
 
 /** Resolves the manager key or exits 3 with a actionable hint. */

@@ -79,7 +79,7 @@ export function renderApiError(result: ApiResult, json: boolean): number {
   const parts = [err.code, `HTTP ${err.httpStatus}`, result.requestId ? `request ${result.requestId}` : null]
     .filter(Boolean)
     .join(" · ");
-  process.stderr.write(`${red("Error:")} ${sanitizeInline(err.message)}\n${dim(`(${parts})`)}\n`);
+  process.stderr.write(`${red("Error:")} ${sanitizeInline(err.message)}\n${dim(`(${sanitizeInline(parts)})`)}\n`);
 
   const hint = hintFor(err);
   if (hint) process.stderr.write(`${hint}\n`);

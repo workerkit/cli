@@ -1,11 +1,6 @@
 name: Publish
 
-# Tag-driven npm publish with provenance. Auth is npm "trusted publishing" (OIDC): configure the
-# @workerkit/cli package on npmjs.com to trust this repository + this workflow file, and no npm
-# token ever exists. The id-token permission below is what mints the OIDC credential.
-#
-# Tag a version that is NOT already published -- this fires on every v* tag, and a duplicate
-# version fails the publish step.
+# npm trusted publishing must authorize this repository and publish.yml.
 on:
   push:
     tags: ["v*"]
@@ -14,21 +9,49 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
-      # OIDC trusted publishing needs npm >= 11.5.1; Node 22 still bundles npm 10.x, which
-      # silently falls back to the legacy token flow and fails with ENEEDAUTH.
-      - run: npm install -g npm@latest
+      - name: Validate release tag, main ancestry and notes
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          node scripts/check-release.mjs > release-notes.md
+      - run: npm install -g npm@11.20.0
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
-      - run: npm publish --provenance --access public
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run test:package
+      - name: Build release artifact
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          npm pack --json --pack-destination "$RUNNER_TEMP/package" > "$RUNNER_TEMP/pack.json"
+          node --input-type=module -e 'import fs from "node:fs"; const [p] = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/pack.json")); fs.appendFileSync(process.env.GITHUB_ENV, "RELEASE_PACKAGE=" + process.env.RUNNER_TEMP + "/package/" + p.filename + "\n");'
+      - name: Retain the package and notes for release recovery
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ github.ref_name }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            ${{ env.RELEASE_PACKAGE }}
+            ${{ runner.temp }}/pack.json
+            release-notes.md
+      - name: Publish reviewed package to npm
+        run: npm publish "$RELEASE_PACKAGE" --provenance --access public

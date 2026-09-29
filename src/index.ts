@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { buildProgram } from "./program.js";
 import { maybeNudgeUpdate } from "./updateCheck.js";
+import { closeClients } from "./context.js";
+import { scrubSecrets } from "@workerkit/core";
+import { sanitizeInline } from "./output/sanitize.js";
 
 // A closed pipe (`wk ... | head`) is normal termination, not a crash.
 process.stdout.on("error", (err: NodeJS.ErrnoException) => {
@@ -9,9 +12,8 @@ process.stdout.on("error", (err: NodeJS.ErrnoException) => {
 });
 
 process.on("SIGINT", () => {
-  // Commands that handle SIGINT themselves (login, tail) register earlier `once` listeners and
-  // manage their own shutdown; this is the default for everything else.
-  process.exit(130);
+  // Command-specific listeners manage their own shutdown; the default was registered first.
+  if (process.listenerCount("SIGINT") === 1) process.exit(130);
 });
 
 async function main(): Promise<void> {
@@ -24,8 +26,10 @@ async function main(): Promise<void> {
       // exitOverride already set the exit code.
       return;
     }
-    process.stderr.write(`${err.message ?? String(error)}\n`);
+    process.stderr.write(`${sanitizeInline(scrubSecrets(err.message ?? String(error)))}\n`);
     process.exitCode = 1;
+  } finally {
+    await closeClients();
   }
 
   const opts = program.opts<{ json?: boolean; plain?: boolean }>();

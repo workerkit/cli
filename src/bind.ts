@@ -3,7 +3,7 @@ import { InvalidArgumentError } from "commander";
 import { executeTool, isSuccess, z, type ApiResult, type ToolDescriptor, byName } from "@workerkit/core";
 import { buildClient, requireToken, type GlobalOpts } from "./context.js";
 import { renderApiError } from "./errors.js";
-import { sanitizeText } from "./output/sanitize.js";
+import { sanitizeInline, sanitizeText } from "./output/sanitize.js";
 import { dim } from "./output/colors.js";
 import { confirm } from "./output/confirm.js";
 
@@ -42,6 +42,7 @@ interface FlagInfo {
   enumValues?: string[];
   defaultValue?: unknown;
   required: boolean;
+  nullable: boolean;
   description: string;
 }
 
@@ -58,21 +59,23 @@ interface ZodTypeLike {
   description?: string;
 }
 
-function unwrap(type: ZodTypeLike): { base: ZodTypeLike; required: boolean; defaultValue?: unknown } {
+function unwrap(type: ZodTypeLike): { base: ZodTypeLike; required: boolean; nullable: boolean; defaultValue?: unknown } {
   let current = type;
   let required = true;
+  let nullable = false;
   let defaultValue: unknown;
   for (;;) {
     const def = current._def;
     if (def.typeName === "ZodOptional" || def.typeName === "ZodNullable") {
-      required = false;
+      if (def.typeName === "ZodOptional") required = false;
+      else nullable = true;
       current = def.innerType as ZodTypeLike;
     } else if (def.typeName === "ZodDefault") {
       required = false;
       if (def.defaultValue) defaultValue = def.defaultValue();
       current = def.innerType as ZodTypeLike;
     } else {
-      return { base: current, required, defaultValue };
+      return { base: current, required, nullable, defaultValue };
     }
   }
 }
@@ -91,7 +94,7 @@ function flagInfos(descriptor: ToolDescriptor, spec: ToolCommandSpec): FlagInfo[
 
   for (const [key, zodType] of Object.entries(descriptor.schema)) {
     if (skip.has(key)) continue;
-    const { base, required, defaultValue } = unwrap(zodType as unknown as ZodTypeLike);
+    const { base, required, nullable, defaultValue } = unwrap(zodType as unknown as ZodTypeLike);
     const typeName = base._def.typeName ?? "ZodString";
 
     let kind: FlagInfo["kind"] = "string";
@@ -113,13 +116,18 @@ function flagInfos(descriptor: ToolDescriptor, spec: ToolCommandSpec): FlagInfo[
       enumValues,
       defaultValue,
       required,
+      nullable,
       description: firstSentence(description),
     });
   }
   return infos;
 }
 
+// Commander replaces a parser result of null with an empty string. Preserve explicit JSON null until validation.
+const NULL_INPUT = Symbol("null-input");
+
 function coerce(info: FlagInfo, raw: string): unknown {
+  if (info.nullable && raw === "null") return NULL_INPUT;
   switch (info.kind) {
     case "number": {
       const n = Number(raw);
@@ -192,7 +200,7 @@ export function mountTool(parent: Command, commandName: string, spec: ToolComman
     for (const info of infos) {
       const camel = info.flag.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
       const value = options[camel];
-      if (value !== undefined) params[info.key] = info.kind === "boolean" ? Boolean(value) : value;
+      if (value !== undefined) params[info.key] = value === NULL_INPUT ? null : info.kind === "boolean" ? Boolean(value) : value;
     }
 
     await runTool(descriptor, spec, params, globals);
@@ -215,11 +223,12 @@ export async function runTool(
   params: Record<string, unknown>,
   globals: GlobalOpts,
 ): Promise<ApiResult | null> {
-  const parsed = z.object(descriptor.schema).safeParse(params);
+  const schema = z.object(descriptor.schema);
+  const parsed = (descriptor.strictInput ? schema.strict() : schema).safeParse(params);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const where = issue?.path.join(".") ?? "input";
-    process.stderr.write(`Invalid ${where}: ${issue?.message ?? "invalid input"}\n`);
+    process.stderr.write(sanitizeInline(`Invalid ${where}: ${issue?.message ?? "invalid input"}`) + "\n");
     process.exitCode = 2;
     return null;
   }
@@ -262,13 +271,12 @@ export function emitResult(
     return;
   }
 
-  const data = descriptor.mapData ? (descriptor.mapData(result.data, params) ?? result.data) : result.data;
-
   if (globals.json) {
-    process.stdout.write(JSON.stringify(data, null, 2) + "\n");
+    process.stdout.write(JSON.stringify(result.data, null, 2) + "\n");
     return;
   }
 
+  const data = descriptor.mapData ? (descriptor.mapData(result.data, params) ?? result.data) : result.data;
   let text: string | null = null;
   if (!globals.plain && spec.render) text = spec.render(data, params);
   if (text === null || text === undefined) text = sanitizeText(JSON.stringify(data, null, 2));

@@ -6,6 +6,24 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-09-29
+
+### Added
+
+Adds wk decision set, combined hybrid instruction and receipt rendering, and required nullable descriptor flags. Hybrid runs accept classification overrides together with language prompts. Requires @workerkit/core 0.3.8.
+
+### Fixed
+
+- Preserve full API data in `--json` output before human-oriented receipt compaction.
+- Recognize run status casing and owner-input pauses when following runs; show event labels and hybrid action evidence.
+- Sanitize terminal output, close HTTP pools, and honor Ctrl-C during follow requests.
+- Handle reserved profile names safely, remove stale file credentials after keychain migration, and bound the update-check body read.
+
+### Changed
+
+- Build clean package contents and validate versions, release notes, installed packages and release tags before publication.
+- Publish npm packages with provenance and attach the package to a matching GitHub Release.
+
 ## [0.3.1] - 2026-09-20
 
 ### Added

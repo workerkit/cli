@@ -1,6 +1,6 @@
 {
   "name": "@workerkit/cli",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "WorkerKit CLI: manage your AI workers and browse the kit directory from the terminal",
   "keywords": [
     "workerkit",
@@ -31,7 +31,8 @@
   },
   "files": [
     "dist",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "SECURITY.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -40,15 +41,19 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"require('node:fs').rmSync('dist', {recursive:true, force:true})\" && tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:release": "node scripts/check-release.mjs",
+    "test:package": "node scripts/test-package.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check:release && npm run typecheck && npm run build && npm test"
   },
   "dependencies": {
     "@napi-rs/keyring": "1.1.9",
-    "@workerkit/core": "0.3.7",
+    "@workerkit/core": "0.3.8",
     "commander": "13.0.0"
   },
   "devDependencies": {

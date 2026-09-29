@@ -4,3 +4,5 @@ dist/
 .env
 .env.*
 credentials.json
+*.tgz
+release-notes.md

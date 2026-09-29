@@ -48,11 +48,17 @@ const credentialService = () => process.env.WK_CONFIG_DIR
 export function readConfig(): CliConfig {
   try {
     const parsed = JSON.parse(readFileSync(configPath(), "utf8")) as CliConfig;
-    if (parsed && typeof parsed === "object" && parsed.profiles) return parsed;
+    if (parsed && typeof parsed === "object" && parsed.profiles && typeof parsed.profiles === "object" && !Array.isArray(parsed.profiles)) {
+      const profiles: Record<string, ProfileRecord> = Object.create(null);
+      for (const [name, record] of Object.entries(parsed.profiles)) {
+        if (record && (record.storage === "file" || record.storage === "keychain")) profiles[name] = record;
+      }
+      return { ...parsed, profiles };
+    }
   } catch {
     // Missing or corrupt config reads as empty — never blocks auth via env var.
   }
-  return { profiles: {} };
+  return { profiles: Object.create(null) as CliConfig["profiles"] };
 }
 
 export function writeConfig(config: CliConfig): void {
@@ -66,11 +72,13 @@ interface CredentialsFile {
 function readCredentialsFile(): CredentialsFile {
   try {
     const parsed = JSON.parse(readFileSync(credentialsPath(), "utf8")) as CredentialsFile;
-    if (parsed && typeof parsed === "object" && parsed.profiles) return parsed;
+    if (parsed && typeof parsed === "object" && parsed.profiles && typeof parsed.profiles === "object" && !Array.isArray(parsed.profiles)) {
+      return { profiles: Object.assign(Object.create(null) as Record<string, string>, parsed.profiles) };
+    }
   } catch {
     // fall through
   }
-  return { profiles: {} };
+  return { profiles: Object.create(null) as Record<string, string> };
 }
 
 /**
@@ -86,7 +94,11 @@ export function writePrivateJson(path: string, value: unknown): void {
   } catch {
     // Windows: chmod is a no-op; ACLs cover it.
   }
-  renameSync(tmp, path);
+  try {
+    renameSync(tmp, path);
+  } finally {
+    rmSync(tmp, { force: true });
+  }
 }
 
 const atomicWriteJson = writePrivateJson;
@@ -144,7 +156,7 @@ export async function resolveCredential(profileName?: string): Promise<ResolvedC
 
   const creds = readCredentialsFile();
   const key = creds.profiles[name];
-  return key ? { key, source: "file", profile: name } : null;
+  return typeof key === "string" && key.length > 0 ? { key, source: "file", profile: name } : null;
 }
 
 /** Store a credential under a profile, preferring the keychain; returns where it landed. */
@@ -175,7 +187,16 @@ export async function storeCredential(profileName: string, key: string): Promise
   };
   config.activeProfile = profileName;
   writeConfig(config);
+  if (storage === "keychain") removeFileCredential(profileName);
   return storage;
+}
+
+function removeFileCredential(profileName: string): void {
+  const creds = readCredentialsFile();
+  if (!Object.hasOwn(creds.profiles, profileName)) return;
+  delete creds.profiles[profileName];
+  if (Object.keys(creds.profiles).length === 0) rmSync(credentialsPath(), { force: true });
+  else atomicWriteJson(credentialsPath(), creds);
 }
 
 /** Remove a profile and its secret from wherever it lives. */
@@ -194,19 +215,7 @@ export async function deleteCredential(profileName: string): Promise<void> {
     }
   }
 
-  const creds = readCredentialsFile();
-  if (creds.profiles[profileName]) {
-    delete creds.profiles[profileName];
-    if (Object.keys(creds.profiles).length === 0) {
-      try {
-        rmSync(credentialsPath());
-      } catch {
-        // fine
-      }
-    } else {
-      atomicWriteJson(credentialsPath(), creds);
-    }
-  }
+  removeFileCredential(profileName);
 
   delete config.profiles[profileName];
   if (config.activeProfile === profileName) {
