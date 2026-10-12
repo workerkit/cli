@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@napi-rs/keyring": "1.1.9",
-    "@workerkit/core": "0.3.15",
+    "@workerkit/core": "0.3.16",
     "commander": "13.0.0"
   },
   "devDependencies": {
