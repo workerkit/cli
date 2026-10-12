@@ -10,13 +10,15 @@ const dist = fileURLToPath(new URL("../../dist/index.js", import.meta.url));
 const configDir = mkdtempSync(join(tmpdir(), "wk-decision-test-"));
 const calls: Array<{ url: string; auth?: string; body: unknown }> = [];
 const receipt = { workerId: "11111111-1111-4111-8111-111111111111", kitSlug: "triage", nextCall: { tool: "worker_deploy", arguments: { tokenId: 42 } } };
-const request = { requestId: "triage-1", name: "Triage", source: { recipe: "email-previews" }, questions: [{ key: "relevant", type: "noul", instructions: "This is a customer support request." }], confidenceFloor: 0.7 };
+const request = { requestId: "triage-1", name: "Triage", timeZoneId: "America/New_York", source: { recipe: "email-previews" }, questions: [{ key: "relevant", type: "noul", instructions: "This is a customer support request." }], confidenceFloor: 0.7 };
 const server = createServer(async (req, res) => {
   let raw = "";
   for await (const chunk of req) raw += chunk;
   calls.push({ url: req.url!, auth: req.headers.authorization, body: raw ? JSON.parse(raw) : null });
   res.writeHead(200, { "content-type": "application/json" });
-  res.end(JSON.stringify(req.method === "POST" ? receipt : { recipes: [{ id: "email-previews" }] }));
+  res.end(JSON.stringify(req.method === "PUT" && req.url?.endsWith("/timezone")
+    ? { tokenId: 107, timeZoneId: JSON.parse(raw).timeZoneId, effectiveTimeZoneId: JSON.parse(raw).timeZoneId ?? "UTC", schedules: [] }
+    : req.method === "POST" ? receipt : { recipes: [{ id: "email-previews" }] }));
 });
 let baseUrl: string;
 beforeAll(async () => {
@@ -39,6 +41,39 @@ function wk(args: string[], input?: string): Promise<{ code: number | null; stdo
 }
 
 describe.skipIf(!existsSync(dist))("decision commands on the wire", () => {
+  it.each(["America/New_York", "America/Los_Angeles", "UTC", "null"])("sets a worker timezone to %s through the manager API", async zone => {
+    const timeZoneId = zone === "null" ? null : zone;
+    const result = await wk(["workers", "timezone", "107", "--time-zone-id", zone, "--json", "--yes"]);
+    expect(result.code, result.stderr).toBe(0);
+    expect(calls.at(-1)).toMatchObject({ url: "/api/manage/workers/107/timezone", auth: "Bearer pe_mgr_decision_test", body: { timeZoneId } });
+    expect(JSON.parse(result.stdout)).toMatchObject({ timeZoneId, effectiveTimeZoneId: timeZoneId ?? "UTC" });
+  });
+  it("requires a timezone instead of silently clearing an existing worker", async () => {
+    const count = calls.length;
+    const result = await wk(["workers", "timezone", "107", "--json", "--yes"]);
+    expect(result.code).toBe(2);
+    expect(calls).toHaveLength(count);
+  });
+  it("sends explicit classifier choices for deploy, worker settings and one run", async () => {
+    for (const args of [
+      ["deploy", "42", "--decision-profile-id", "openai-luna"],
+      ["deployment", "update", "42", "--decision-profile-id", "openai-luna"],
+      ["run", "42", "--decision-profile", "openai-luna"],
+    ]) {
+      const result = await wk([...args, "--json", "--yes"]);
+      expect(result.code, result.stderr).toBe(0);
+      expect(calls.at(-1)?.body).toMatchObject({ decisionProfileId: "openai-luna" });
+    }
+    const result = await wk(["run", "42", "--json"]);
+    expect(result.code, result.stderr).toBe(0);
+    expect(calls.at(-1)?.body).not.toHaveProperty("decisionProfileId");
+  });
+
+  it("accepts a classifier default during decision creation", async () => {
+    const result = await wk(["decision", "create", "--json"], JSON.stringify({ ...request, decisionProfileId: "openai-luna" }));
+    expect(result.code, result.stderr).toBe(0);
+    expect(calls.at(-1)?.body).toMatchObject({ decisionProfileId: "openai-luna", deploy: false });
+  });
   it("discovers recipes without forwarding the manager credential", async () => {
     const result = await wk(["decision", "sources", "--app", "email", "--json"]);
     expect(result.code).toBe(0);

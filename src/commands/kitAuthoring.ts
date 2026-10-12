@@ -157,7 +157,6 @@ export function mountKitAuthoring(kit: Command): void {
   // ── the two anonymous reads an author starts from ──────────────────────────────────────────
   mountTool(kit, "guide", {
     tool: "kit_authoring_guide",
-    summary: "How to write a kit, one section at a time (anonymous): --section index|schema|rules|skill|slots|instruction|example|selfcheck",
     render: (data) => {
       const body = data as { section?: string; title?: string; content?: string; sections?: Array<{ key?: string; title?: string }> };
       if (typeof body.content !== "string") return null;
@@ -168,12 +167,10 @@ export function mountKitAuthoring(kit: Command): void {
 
   mountTool(kit, "vocabulary", {
     tool: "kit_vocabulary",
-    summary: "The live app / tool-key / category vocabulary a kit manifest accepts (anonymous); --app <code> for one surface with its vendors and tools",
   });
 
   mountTool(kit, "tools", {
     tool: "kit_app_tools",
-    summary: "What a worker can do, app by app: every tool's description and the operation key that unlocks it (anonymous); --app <code> for one app",
     render: (data) => {
       const body = data as { apps?: Array<{ app?: string; name?: string; tools?: Array<{ name?: string; description?: string; readOnly?: boolean; requires?: string[]; hosted?: boolean }> | null; toolsNote?: string }>; toolCount?: number; note?: string };
       if (!Array.isArray(body.apps)) return null;
@@ -200,7 +197,6 @@ export function mountKitAuthoring(kit: Command): void {
   // ── the owner's listings ───────────────────────────────────────────────────────────────────
   mountTool(kit, "mine", {
     tool: "my_kits_list",
-    summary: "This account's kits, any status, with moderation state",
     render: (data) => {
       const body = data as { items?: MyKitRow[] };
       if (!Array.isArray(body.items)) return null;
@@ -219,38 +215,32 @@ export function mountKitAuthoring(kit: Command): void {
   mountTool(kit, "scan", {
     tool: "kit_scan_get",
     positionals: ["kitRef"],
-    summary: "A listing's security-scan report: moderation state, checks, findings (author-only)",
   });
 
   mountTool(kit, "update", {
     tool: "kit_update",
     positionals: ["kitRef"],
-    summary: "Edit a listing in place (partial; omitted fields unchanged; the slug never moves)",
   });
 
   mountTool(kit, "unpublish", {
     tool: "kit_unpublish",
     positionals: ["kitRef"],
-    summary: "Withdraw a listing from the directory (reversible with relist)",
   });
 
   mountTool(kit, "relist", {
     tool: "kit_relist",
     positionals: ["kitRef"],
-    summary: "Restore an unlisted kit to the directory (re-runs the supply-chain scan)",
   });
 
   mountTool(kit, "make-private", {
     tool: "kit_make_private",
     positionals: ["kitRef"],
-    summary: "Hide a listing from the directory; this account can still install it",
   });
 
   mountTool(kit, "delete", {
     tool: "kit_delete",
     positionals: ["kitRef"],
     confirm: (p) => `Permanently delete kit ${p.kitRef} and its download history? (unpublish is the reversible alternative)`,
-    summary: "Hard-delete a listing (permanent)",
   });
 
   // ── validate: the dry run ──────────────────────────────────────────────────────────────────
@@ -345,11 +335,9 @@ export function mountKitAuthoring(kit: Command): void {
 export function mountPublisherAuthoring(publisher: Command): void {
   mountTool(publisher, "me", {
     tool: "publisher_get_mine",
-    summary: "This account's publisher profile (404 until the first publish creates it)",
   });
 
   mountTool(publisher, "set", {
     tool: "publisher_set",
-    summary: "Edit the publisher profile: --name, --description, --links '[...]', --is-listed / --no-is-listed",
   });
 }

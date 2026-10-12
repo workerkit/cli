@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import assert from "node:assert/strict";
@@ -23,13 +23,23 @@ try {
   }
   const consumer = join(temp, "consumer");
   mkdirSync(consumer);
+  // Anchor npm here even if the OS temp directory has an unrelated package.json.
+  writeFileSync(join(consumer, "package.json"), JSON.stringify({ name: "workerkit-package-smoke", version: "0.0.0", private: true }));
   const extra = pkg.name === "@workerkit/cli" && process.env.WK_CORE_TARBALL ? [resolve(process.env.WK_CORE_TARBALL)] : [];
   runNpm(["install", "--no-audit", "--no-fund", "--prefer-offline", "--omit=dev", "--package-lock=false", join(temp, pack.filename), ...extra], consumer);
   if (pkg.name === "@workerkit/core") {
     execFileSync(process.execPath, ["--input-type=module", "-e", `
       import assert from 'node:assert/strict';
       import { WorkerKitClient, byName, allDescriptors } from '@workerkit/core';
+      const { createRequire } = await import("node:module");
+      const require = createRequire(import.meta.url);
+      assert.equal(require("@workerkit/core/package.json").version, ${JSON.stringify(pkg.version)});
       assert.ok(byName('worker_decision_set'));
+      assert.ok(byName('action_worker_options').schema.app);
+      assert.equal(byName('worker_tool_call').requestTimeoutMs({}), 90000);
+      assert.ok(byName('app_github_accounts'));
+      assert.ok(byName('app_github_repos'));
+      assert.ok(byName('app_github_branches'));
       assert.equal(new Set(allDescriptors.map(d => d.name)).size, allDescriptors.length);
       await new WorkerKitClient({ baseUrl: 'https://api.workerkit.ai' }).close();
     `], { cwd: consumer, stdio: "inherit" });
@@ -42,6 +52,12 @@ try {
     assert.equal(version, pkg.version);
     const help = execFileSync(process.execPath, [entry, "decision", "set", "--help"], { encoding: "utf8" });
     assert.ok(help.includes("--decision-spec") && help.includes("--updated-at"));
+    const guideHelp = execFileSync(process.execPath, [entry, "kit", "guide", "--help"], { encoding: "utf8" });
+    assert.ok(guideHelp.includes("--section") && guideHelp.includes("state"));
+    const actionHelp = execFileSync(process.execPath, [entry, "workers", "create-action", "--help"], { encoding: "utf8" });
+    assert.ok(actionHelp.includes("--app") && actionHelp.includes("--action-spec"));
+    const timezoneHelp = execFileSync(process.execPath, [entry, "workers", "timezone", "--help"], { encoding: "utf8" });
+    assert.ok(timezoneHelp.includes("--time-zone-id"));
   }
   console.log(`${pack.name}@${pack.version}: package files and installed consumer passed (${names.length} files)`);
 } finally {

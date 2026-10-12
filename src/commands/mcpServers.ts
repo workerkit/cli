@@ -125,7 +125,6 @@ export function mountMcpServers(program: Command): void {
 
   mountTool(servers, "list", {
     tool: "mcp_servers_list",
-    summary: "Every MCP server you registered, published or not, with its tools",
     render: (data) => {
       const body = data as { servers?: McpServerRow[]; max?: number };
       if (!Array.isArray(body.servers)) return null;
@@ -148,7 +147,6 @@ export function mountMcpServers(program: Command): void {
   mountTool(servers, "get", {
     tool: "mcp_server_get",
     positionals: ["gatewayId"],
-    summary: "One server with every discovered tool (handle from `wk mcp-servers list`)",
     render: (data) => renderServer(data as McpServerRow),
   });
 
@@ -203,7 +201,6 @@ export function mountMcpServers(program: Command): void {
   mountTool(servers, "discover", {
     tool: "mcp_server_discover",
     positionals: ["gatewayId"],
-    summary: "List the server's tools again with its stored credential",
     render: renderResult,
   });
 
@@ -251,6 +248,5 @@ export function mountMcpServers(program: Command): void {
     tool: "mcp_server_delete",
     positionals: ["gatewayId"],
     confirm: (p) => `Delete MCP server ${p.gatewayId}? Its tools, credentials and every worker binding go with it.`,
-    summary: "Delete a server (its tools, credentials and worker bindings go with it)",
   });
 }

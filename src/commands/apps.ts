@@ -99,9 +99,17 @@ export function mountApps(program: Command): void {
 
   mountTool(apps, "list", {
     tool: "apps_list",
-    summary: "Every app with its connection state, how to connect it, and every connection behind the grid",
     render: renderApps,
   });
+
+  const github = apps.command("github").description("Discover connected GitHub accounts, repositories and branches before installing a worker (discoverAppResources scope)");
+  mountTool(github, "accounts", { tool: "app_github_accounts",});
+  mountTool(github, "repos", { tool: "app_github_repos",});
+  mountTool(github, "branches", { tool: "app_github_branches", positionals: ["repo"],});
+
+  const slack = apps.command("slack").description("Discover connected Slack workspaces and conversations (discoverAppResources scope)");
+  mountTool(slack, "workspaces", { tool: "app_slack_workspaces",});
+  mountTool(slack, "conversations", { tool: "app_slack_conversations",});
 
   const connect = apps
     .command("connect")
@@ -120,7 +128,7 @@ export function mountApps(program: Command): void {
     // With no input at all, prompt for the one field the common single-secret recipes take.
     const SINGLE_FIELD: Record<string, string> = {
       telegram: "botToken", discord: "botToken", slack: "botToken", sendgrid: "apiKey", resend: "apiKey",
-      tavily: "apiKey", brave: "apiKey", exa: "apiKey", brightData: "apiKey", firecrawl: "apiKey",
+      tavily: "apiKey", brave: "apiKey", exa: "apiKey", brightData: "apiKey", firecrawl: "apiKey", nimble: "apiKey",
       granola: "apiKey", krisp: "apiKey", hubspot: "token", notion: "apiToken", linear: "apiKey", monday: "apiToken", asana: "accessToken",
     };
     const promptFields = SINGLE_FIELD[provider] ? [SINGLE_FIELD[provider]] : [];
@@ -155,7 +163,6 @@ export function mountApps(program: Command): void {
     tool: "app_disconnect",
     positionals: ["provider", "connectionId"],
     confirm: (p) => `Disconnect ${p.provider} connection ${p.connectionId}? Workers using it lose the app immediately.`,
-    summary: "Remove one connection (provider + id from `wk apps list`)",
   });
 }
 
@@ -164,7 +171,6 @@ export function mountModelKeys(program: Command): void {
 
   mountTool(keys, "list", {
     tool: "model_keys_list",
-    summary: "Stored keys: provider, label, suffix, status (never the key)",
     render: (data) => {
       const body = data as { keys?: ModelKeyRow[] };
       if (!Array.isArray(body.keys)) return null;
@@ -229,6 +235,5 @@ export function mountModelKeys(program: Command): void {
     tool: "model_key_delete",
     positionals: ["provider"],
     confirm: (p) => `Remove the ${p.provider} key? Runs on its models return to platform billing.`,
-    summary: "Remove a provider key (also clears an INVALID one so skipped runs resume)",
   });
 }

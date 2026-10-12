@@ -11,7 +11,6 @@ import { sanitizeInline, sanitizeText } from "../output/sanitize.js";
 export function mountAbout(program: Command): void {
   mountTool(program, "about", {
     tool: "workerkit_about",
-    summary: "What WorkerKit is and when to use it, for agents (anonymous): --section index|why|operate|access|cost|start",
     render: (data) => {
       const body = data as {
         section?: string;

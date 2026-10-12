@@ -1,11 +1,12 @@
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
-import { executeTool, isSuccess, z, type ApiResult, type ToolDescriptor, byName } from "@workerkit/core";
+import { executeTool, isSuccess, z, type ApiResult, type ToolDescriptor, byName, toolDocumentation } from "@workerkit/core";
 import { buildClient, requireToken, type GlobalOpts } from "./context.js";
 import { renderApiError } from "./errors.js";
 import { sanitizeInline, sanitizeText } from "./output/sanitize.js";
 import { dim } from "./output/colors.js";
 import { confirm } from "./output/confirm.js";
+import { bespokeCommandBindings } from "./commands/bindings.js";
 
 /**
  * Descriptor-bound commands: the descriptor's zod schema is the single source for flag names,
@@ -28,12 +29,86 @@ export interface ToolCommandSpec {
   confirm?: (params: Record<string, unknown>) => string | null;
   /** Human-mode renderer; return null to fall back to sanitized pretty JSON. */
   render?: (data: unknown, params: Record<string, unknown>) => string | null;
-  /** One-line help override; defaults to the first sentence of the descriptor description. */
-  summary?: string;
 }
 
 /** Flat registry of every mounted spec — consumed by the coverage test. */
 export const mountedSpecs: ToolCommandSpec[] = [];
+const commandTools = new WeakMap<Command, readonly string[]>();
+const referenceSuffixes = new WeakMap<Command, Readonly<Record<string, string>>>();
+
+/** Shared by generated and bespoke commands; also supplies the offline CLI/tool mapping. */
+export function addToolHelp(command: Command, names: readonly string[], includeInputs = false, suffixes: Readonly<Record<string, string>> = {}): void {
+  commandTools.set(command, names);
+  referenceSuffixes.set(command, suffixes);
+  for (const name of names) {
+    const descriptor = byName(name);
+    if (!descriptor) throw new Error(`Unknown help descriptor: ${name}`);
+    const binding = bespokeCommandBindings[name];
+    if (binding?.unsupportedInputs?.length) {
+      const limits = binding.unsupportedInputs.map(key => `${key}: ${binding.offFlag?.[key] ?? "Use the Manager surface."}`).join("\n");
+      command.addHelpText("after", () => `\nCLI input limits:\n${formatToolReferences(limits, command)}\n`);
+    }
+    command.addHelpText("after", () => `\n${formatToolReferences(toolDocumentation(descriptor), command)}\n`);
+    if (includeInputs) {
+      const inputs = Object.entries(descriptor.schema).filter(([, field]) => field.description)
+        .map(([key, field]) => {
+          const alias = binding?.aliases?.[key] ?? key;
+          const option = command.options.find(o => o.attributeName() === alias);
+          const argument = command.registeredArguments.find(a => a.name() === alias || a.name() === kebab(alias));
+          const label = binding?.offFlag?.[key] ? `${key} (CLI: ${binding.offFlag[key]})`
+            : option?.long ?? (argument ? `<${argument.name()}>` : `request field ${key}`);
+          return `${label}: ${field.description}`;
+        });
+      command.addHelpText("after", () => `\nTool inputs (use the options above or the command's request JSON):\n${formatToolReferences(inputs.join("\n\n"), command)}\n`);
+    }
+  }
+}
+
+export function toolCommandPaths(root: Command): Record<string, string[]> {
+  const paths: Record<string, string[]> = {};
+  function walk(command: Command, parents: string[]): void {
+    const path = [...parents, command.name()];
+    for (const name of commandTools.get(command) ?? []) (paths[name] ??= []).push(path.join(" ") + (referenceSuffixes.get(command)?.[name] ?? ""));
+    for (const child of command.commands) walk(child, path);
+  }
+  walk(root, []);
+  return paths;
+}
+
+/** Translate references only, without guessing a shell invocation from tool JSON. */
+export function formatToolReferences(text: string, command: Command): string {
+  let root = command;
+  while (root.parent) root = root.parent;
+  const paths = toolCommandPaths(root);
+  return text.replace(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b(\()?/g, (match: string, open: string | undefined, offset: number) => {
+    const name = open ? match.slice(0, -1) : match;
+    const descriptor = byName(name);
+    if (!descriptor) return match; // Wire codes and external app-tool names are data.
+    const unsupported = bespokeCommandBindings[name]?.unsupportedInputs ?? [];
+    if (open) {
+      const inputs = text.slice(offset + match.length).split(")", 1)[0]!;
+      if (unsupported.some(key => new RegExp(`(?:^|[,\\s{])${key}\\s*:`).test(inputs)))
+        return `Manager tool ${name} (inputs: `;
+    }
+    const mapped = paths[name]?.join(" / ") ?? `Manager tool ${name}`;
+    if (open) return `${mapped} (tool inputs: `;
+    const field = /^\.([A-Za-z][A-Za-z0-9]*)/.exec(text.slice(offset + match.length))?.[1];
+    if (field) return unsupported.includes(field) ? `Manager input ${name}`
+      : `${mapped} ${field in descriptor.schema ? "input" : "result"}`;
+    return mapped;
+  });
+}
+
+/** Call after mounting all commands so forward references resolve too. */
+export function finalizeToolHelp(root: Command): void {
+  function visit(command: Command): void {
+    command.description(formatToolReferences(command.description(), root));
+    for (const option of command.options) option.description = formatToolReferences(option.description, root);
+    for (const argument of command.registeredArguments) argument.description = formatToolReferences(argument.description, root);
+    for (const child of command.commands) visit(child);
+  }
+  visit(root);
+}
 
 interface FlagInfo {
   key: string;
@@ -84,8 +159,17 @@ const kebab = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLo
 
 export function firstSentence(text: string): string {
   const cleaned = text.replace(/\s+/g, " ").trim();
-  const match = /^(.*?[.!?])(\s|$)/.exec(cleaned);
-  return (match ? match[1] : cleaned.slice(0, 120)) ?? "";
+  let depth = 0;
+  for (let i = 0; i < cleaned.length; i++) {
+    const character = cleaned[i]!;
+    if (character === "(") depth++;
+    else if (character === ")") depth = Math.max(0, depth - 1);
+    if (depth || !".!?".includes(character) || (i + 1 < cleaned.length && !/\s/.test(cleaned[i + 1]!))) continue;
+    const candidate = cleaned.slice(0, i + 1);
+    if (/\b(?:e\.g|i\.e|vs)\.$/i.test(candidate)) continue;
+    return candidate;
+  }
+  return cleaned;
 }
 
 function flagInfos(descriptor: ToolDescriptor, spec: ToolCommandSpec): FlagInfo[] {
@@ -117,7 +201,7 @@ function flagInfos(descriptor: ToolDescriptor, spec: ToolCommandSpec): FlagInfo[
       defaultValue,
       required,
       nullable,
-      description: firstSentence(description),
+      description,
     });
   }
   return infos;
@@ -165,10 +249,11 @@ export function mountTool(parent: Command, commandName: string, spec: ToolComman
   mountedSpecs.push(spec);
 
   const cmd = parent.command(commandName);
-  cmd.description(spec.summary ?? firstSentence(descriptor.description));
+  cmd.description(firstSentence(descriptor.description));
+  addToolHelp(cmd, [spec.tool]);
 
   for (const key of spec.positionals ?? []) {
-    cmd.argument(`<${key}>`);
+    cmd.argument(`<${key}>`, descriptor.schema[key]?.description);
   }
 
   const infos = flagInfos(descriptor, spec);

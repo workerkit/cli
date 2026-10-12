@@ -6,8 +6,8 @@
 [![license](https://img.shields.io/npm/l/%40workerkit%2Fcli.svg)](LICENSE)
 
 Manage your [WorkerKit](https://workerkit.ai) AI workers and browse the kit directory from the
-terminal. Every command is bound to the same tool definitions the WorkerKit MCP server exposes
-to AI agents, with shared schemas and contract tests keeping their request formats aligned.
+terminal. API commands use the same tool definitions as the WorkerKit MCP server,
+with shared schemas and contract tests keeping their request formats aligned.
 
 ## Install
 
@@ -58,6 +58,12 @@ Runtime permissions require a human-approved account ceiling, shared by all work
 
 For BYOK, give the person the Settings URL and account from `wk onboarding`. A provider key already in protected storage can use the existing `wk model-keys` secret-input flow with `manageConnections`. BYOK can still incur platform or app fees. Check worker readiness, deployment and budgets before a run. Revoking agent access does not pause existing scheduled workers.
 
+## Offline tool guidance
+
+Use `wk instructions [workers|decision|directory]` for shared rules, `wk tools list` to map tool names to CLI commands, and `wk tools describe <tool-name>` for full tool and input guidance. These commands need no credentials or network; add `--json` for structured output. Each command's `--help` includes its full core-provided description and parameter guidance.
+
+Help links related commands, including `wk kit install --preview`. Examples labeled "tool inputs" use API field names; use the command's listed flags, arguments or request file to pass them. Inputs available only through Manager tools are labeled separately, with a CLI alternative where available. JSON guidance preserves the original tool names and text.
+
 ## Commands
 
 ```
@@ -70,10 +76,16 @@ wk workers delete <tokenId>           # permanent, takes sub-workers with it (`d
 wk workers permissions <tokenId>      # what it may touch, in the kit vocabulary (read-only)
 wk workers clone-preview|clone|clone-bulk <tokenId> [--title ...]   # keys shown once
 wk workers budget|budget-set <tokenId> ...
+wk workers timezone <tokenId> --time-zone-id America/New_York   # reports and schedules that follow the worker
+wk workers timezone <tokenId> --time-zone-id UTC               # reset the worker clock; requires manageSchedules
+wk workers action-options [--app ...]   # Action worker apps, tools and defaults
+wk workers create-action --app ... --name ... --request-id ...   # Action worker: no model, never deployed
+wk workers tools|invoke|invocation <tokenId> ...   # list an Action worker's tools, call one, read a write's receipt
 
-wk deploy <tokenId> [--model-slug ...]   # put a worker on the hosted runtime: what makes it run
-wk deployment list|get|update|remove <tokenId> ...
-wk deployment models                  # what this account may deploy on, priced
+wk deploy <tokenId> [--model-slug ...]   # enable hosted runs and schedules; does not start a run
+wk deployment list
+wk deployment get|update|remove <tokenId> ...
+wk deployment models                  # language models and decision profiles this account may use, priced
 
 wk run <tokenId> [--prompt ...] [--follow]
 wk run <tokenId> [--source-args '{...}'] [--answers '{...}'] [--max-items 20] [--wait-seconds 25]   # a decision worker's per-item decisions; --answers = per-run install answers, never saved
@@ -88,7 +100,7 @@ wk runs question|answer <runId> ...   # two-way runs
 wk runs cancel <runId>
 wk runs score <runId> <0-100>         # or --clear
 wk runs clear-digest <runId>
-wk fleet pulse|health|budget|budget-set   # in flight; the rot digest; the account-wide ceilings
+wk fleet pulse|health|budget|budget-set   # current runs, fleet issues and account-wide ceilings
 wk account usage                      # plan, worker + hosted slots, wallet, request windows, spend
 
 wk memory get|add|update|delete <tokenId> ...
@@ -101,15 +113,15 @@ wk instruction versions|version|restore <tokenId> [versionNumber]
 
 wk kit search [--query ...] [--category ...]   # anonymous: works before sign-in
 wk kit get <slug>
-wk kit stats <slug>
 wk kit categories                     # the directory's filter vocabulary
-wk kit install <slug> [--preview]     # preview → confirm → install (a decision kit's questions: --decision-answers '{...}')
+wk kit install <slug> [--preview] [--time-zone-id America/New_York]   # preview → confirm → install (a decision kit's questions: --decision-answers '{...}')
 wk kit tools [--app email]            # what a worker can do, app by app, with the keys that unlock each tool (anonymous)
 wk kit guide [--section schema]       # how to write a kit (anonymous)
 wk kit vocabulary [--app email]       # the live tool-key vocabulary (anonymous)
-wk decision sources [--app email]    # supported classification sources, grants and request examples
-wk decision guide                    # focused authoring guide (anonymous)
+wk decision sources [--app email]     # supported classification sources, grants and request examples
+wk decision guide                     # focused authoring guide (anonymous)
 wk decision create --file decision.json --json   # private kit + worker; optional deploy, never runs
+wk decision set <tokenId> --decision-spec '<JSON>' --updated-at '<revision>'   # --updated-at null attaches the first classifier
 wk kit validate --file kit.json       # every gate's verdict at once
 wk kit publish --file kit.json --private   # validate → confirm → publish
 wk kit replace <slug> --file kit.json [--public]
@@ -121,8 +133,15 @@ wk publisher me|set ...
 wk apps list [--operator-id ...]      # which apps the operator can use, how to connect the rest
 wk apps connect <provider> [--field name=value ...]   # secret from a file, stdin or a hidden prompt
 wk apps disconnect <provider> <connectionId>
-wk model-keys list|set|delete <provider>   # the account's own model-provider API keys
-wk mcp-servers list|get <handle>      # your own MCP servers: reach an app the platform does not offer
+wk apps github accounts [--q ...] [--operator-id ...]
+wk apps github repos --connection-id <id> [--q ...] [--page ...]
+wk apps github branches <owner/repo> --connection-id <id> [--q ...]
+wk apps slack workspaces [--operator-id ...]
+wk apps slack conversations --workspace-id <id> [--types ...] [--q ...] [--cursor ...]
+wk model-keys list                   # the account's own model-provider API keys
+wk model-keys set|delete <provider> ...
+wk mcp-servers list                  # your own MCP servers: reach an app the platform does not offer
+wk mcp-servers get <handle>
 wk mcp-servers create <name> <url> --auth-type Bearer   # register + credential (file, stdin or prompt) + discover
 wk mcp-servers discover|delete <handle>
 wk mcp-servers set-tools <handle> <toolId...>   # enabling ≥1 tool publishes the server
@@ -132,36 +151,43 @@ wk wallet balance
 wk wallet checkout --amount-usd <amount> --idempotency-key <key>
 wk wallet checkout-status <sessionId>
 
+wk support --category error|bug|app_request|general --subject <line> --message <text> [--run-id ...] [--worker-id ...]
+                                      # contact support; prints a PE-XXXXXX reference, the reply goes to your email
+
 wk auth key-info                      # what the current key is and its scopes
 wk auth login [--start|--resume|--cancel] [--no-browser] [--email <address>]
 wk auth status|logout|profiles|use
 wk update                             # update the CLI itself
 ```
 
-For classification, start with `wk decision sources --app email` and `wk decision guide`.
-Put a recipe, typed questions, `confidenceFloor` and a unique `requestId` in a JSON file,
-then call `wk decision create --file decision.json --json` (piped JSON also works).
-This creates a private kit and worker through the normal lifecycle. `deploy:true` optionally
-deploys it; creation never runs it. Follow the returned `nextCall`, then use `wk run`.
-Creation requires `publishKits` + `installKits`; deployment additionally needs
-`manageDeployments`. Reuse the same request ID and identical body after a timeout.
-The initial sources are email previews, calendar events and Google Sheets rows.
-
 General worker authoring is a two-step: `wk kit publish --file kit.json --private`, then
 `wk kit install <slug>`. A private kit is installable only by your account and goes through the
-same validators as a directory listing — that is the platform's rule for permissions authored by an
-agent. A kit can be a language kit (an instruction), a decision kit (a routing table), or a
-hybrid kit (classification followed by one language-model agent). Use
-`wk kit search --model-type decision` or `--model-type hybrid` to narrow discovery; `wk kit guide
---section index` says which a job is. A decision worker is read, answered and run through the same
-`wk instruction` and `wk run` commands as any other, with its own flags. `wk kit tools`, `wk kit guide` and `wk kit vocabulary` are what to read first, and
-`wk apps list` says which apps the worker will actually be able to reach: a worker only uses apps
-that are connected on its operator. `wk apps connect` connects the credential-based ones (bot
-tokens, API keys, private-app tokens); Google, Microsoft, GitHub and Reddit sign in on the
-dashboard. An app the platform does not offer can still be reached through its MCP server:
-`wk mcp-servers create` registers it as your own custom MCP app (credential included),
-`wk mcp-servers set-tools` enables the tools a job needs — which publishes it — and the kit binds
-it in `content.mcpServers` by the kit id `wk mcp-servers list` shows.
+same validators as a directory listing — that is the platform's rule for permissions authored by
+an agent. A kit can be a language kit (an instruction), a decision kit (a routing table), a hybrid
+kit (classification followed by one language-model agent), or an Action kit (selected app tools
+with no model; see [Action workers](#action-workers)). Use `wk kit search --model-type decision`
+or `--model-type hybrid` to narrow discovery; `wk kit guide --section index` says which a job is.
+A decision worker is read, answered and run through the same `wk instruction` and `wk run`
+commands as any other, with its own flags.
+
+`wk kit tools`, `wk kit guide` and `wk kit vocabulary` are what to read first, and `wk apps list`
+says which apps the worker will actually be able to reach: a worker only uses apps that are
+connected on its operator. `wk apps connect` connects the credential-based ones (bot tokens, API
+keys, private-app tokens); Google, Microsoft, GitHub and Reddit sign in on the dashboard. An app
+the platform does not offer can still be reached through its MCP server: `wk mcp-servers create`
+registers it as your own custom MCP app (credential included), `wk mcp-servers set-tools` enables
+the tools a job needs — which publishes it — and the kit binds it in `content.mcpServers` by the
+kit id `wk mcp-servers list` shows.
+
+For GitHub setup, preview the kit, then run `wk apps github accounts`,
+`wk apps github repos --connection-id <id> --q my-repo --json` and
+`wk apps github branches <owner/repo> --connection-id <id> --json`. These need a key with the
+`discoverAppResources` scope and return private metadata without running a worker. Repository
+and branch filters cover one page, so follow `nextPage` even when a page has no matches. Install
+with `--github-selection '{"accounts":[{"connectionId":7,"repositoryMode":"selected","repositoryIds":[101]}]}'`,
+using the IDs from discovery, or `{"accounts":[]}` to set GitHub up later. A key with
+`discoverAppResources` must make this choice explicitly; `"all"` also covers repositories granted
+later. A branch input configures the job but does not restrict repository access.
 
 Flags mirror the API's field names in kebab-case (`--page-size`, `--from-utc`); boolean flags
 also take a `--no-` form to pass an explicit false (`--no-is-enabled`). Run any command with
@@ -170,6 +196,97 @@ also take a `--no-` form to pass an explicit false (`--no-is-enabled`). Run any 
 Global flags: `--json` (raw API data, stable machine contract), `--plain` (compact agent-friendly
 text), `--yes` (skip confirmations), `--profile <name>`. They work before or after the
 subcommand: `wk --json workers list` and `wk workers list --json` are equivalent.
+
+## Decision and hybrid workers
+
+For classification, start with `wk decision sources --app email` and `wk decision guide`. Put a
+recipe, typed questions, `confidenceFloor` and a unique `requestId` in a JSON file, then call
+`wk decision create --file decision.json --json` (piped JSON also works). This creates a private
+kit and worker through the normal lifecycle. `deploy:true` optionally deploys it; creation never
+runs it. Follow the returned `nextCall`, then use `wk run`. Creation requires `createWorkers`;
+deployment also needs `manageDeployments`. After a timeout, reuse the same request
+ID with the identical body. The recipes cover email previews, calendar events and Google Sheets
+rows; any other source, or a routed action, needs a decision kit published privately and
+installed.
+
+Runs have no preview mode: they execute their declared actions. To compare classifiers safely,
+use a spec whose routes only return results.
+
+### Classifiers
+
+Decision workers classify with Jev by default. `wk deployment models --json` lists the enabled
+`decisionProfiles` and their prices. Save a worker's classifier with
+`wk deployment update <tokenId> --decision-profile-id openai-luna`, or choose one for a single run
+with `wk run <tokenId> --decision-profile openai-luna`; `jev-default` returns to Jev. A kit
+document or a `wk decision create` request can set a top-level `decisionProfileId` as the
+default, even when nothing is deployed. A run's choice wins over the worker's, then the kit
+default, then Jev. The classifier is independent of the language model. Review sample results
+after switching classifiers, because confidence scores differ between providers.
+
+### Classify then act
+
+A hybrid worker keeps its language instruction and a schema-3 classifier. `wk instruction get
+<tokenId>` reads both sections and the classifier revision. Attach a classifier with
+`wk decision set <tokenId> --decision-spec '<JSON>' --answers '{}' --updated-at null`; replace it
+using the exact current revision, or remove it with `--decision-spec null --updated-at
+'<revision>'`. A protected kit's classifier cannot be replaced.
+
+`wk run` accepts source arguments, setup-answer overrides and a source cap alongside a language
+prompt and model. A waited receipt shows the classification, one agent stage, confirmed draft
+references, separate model usage and the actual wallet charge; `--json` keeps the full receipt.
+Hybrid runs are on demand: recurring drafts and automatic retries of uncertain writes are not
+supported. Hybrid availability depends on the server; an unavailable feature returns the server's
+error, and the CLI never emulates classification or retries uncertain actions.
+
+### Slack sources
+
+`wk apps slack workspaces --json` lists the connected workspaces and their saved capabilities.
+`wk apps slack conversations --workspace-id T123 --types public_channel --json` finds channel
+IDs; pass each `nextCursor` back with `--cursor`, even after an empty filtered page. Both need the
+`discoverAppResources` scope. Search needs a user token with `search:read`; reading history needs
+the bot in the conversation with history scopes, and covers one conversation. Neither discovery
+nor kit validation proves live message access.
+
+For a Slack decision kit, copy the tool's `argsSchema` and documented `decisionSource` mapping
+from `wk kit tools --app slack --json` rather than guessing, then validate, publish privately and
+install.
+
+## Action workers
+
+An Action worker exposes selected app tools without a language or decision model. Discover apps
+and their default tools, then create a worker. Native and reviewed MCP apps use the same flow;
+omitting `--app` selects Slack:
+
+```sh
+wk workers action-options --json
+wk workers action-options --app weather --json
+wk workers create-action --app weather --name "Weather tools" --request-id weather-tools-1 --json
+wk workers create-action --name "Slack actions" --slack-connection-id 123 --request-id slack-actions-1 --json
+wk workers tools 42 --json
+```
+
+Use the connection and worker IDs your account returns. Discovery needs `readWorkers`; creation
+needs `createWorkers`. There is no model or deployment: `wk run` and `wk deploy`
+refuse an Action worker with `400 action_worker_requires_invoke`. The selected tools and the
+connected sender stay fixed until the owner saves changes in the dashboard, and tools added to
+the catalog later are never added to an existing worker.
+
+To send a Slack DM, put the tool's arguments in `message.json`, for example
+`{"userId":"U123","text":"Hello"}`, then run:
+
+```sh
+wk workers invoke 42 slack_send_dm --file message.json --idempotency-key intended-send-1 --json
+wk workers invocation 42 <invocationId> --json
+```
+
+Calls and receipts need `invokeActions`. A call answers with `status` `succeeded`, `denied`,
+`failed`, `in_progress` or `outcome_unknown`; `invoke` prints the full receipt and exits nonzero
+unless the call succeeded. Reads take JSON arguments the same way and need no key. After a
+transport failure, repeat the same key with the same arguments: it returns the stored result
+without calling the app again. `outcome_unknown` means the app may have acted: read the receipt,
+check the app, and never retry under a new key. A refusal marked `retryable` can be tried again
+later under a new key. Write receipts keep the confirmation, not the app's private response, so
+never resend to recover a lost response.
 
 ## Exit codes
 
@@ -207,13 +324,15 @@ npm test            # unit and command contracts against local stand-in servers
 npm run test:package # install the tarball in a temporary directory and smoke-test wk
 ```
 
-Issues and pull requests are welcome. Commands are generated from the shared
-[`@workerkit/core`](https://github.com/workerkit/core) tool descriptors; a coverage test asserts
-every descriptor is reachable, so a new tool usually needs no CLI code at all. Security reports
+Issues and pull requests are welcome. The shared
+[`@workerkit/core`](https://github.com/workerkit/core) descriptors define API inputs and requests;
+a coverage test checks that every tool is reachable through a CLI command. Security reports
 go to [SECURITY.md](SECURITY.md), not the issue tracker.
 
-Releases are tag-driven: maintainers push a `vX.Y.Z` tag and CI publishes to npm via
+Releases are tag-driven: the `workerkit` account pushes a `vX.Y.Z` tag and CI publishes to npm via
 [trusted publishing](https://docs.npmjs.com/trusted-publishers) with a provenance attestation.
+Publication reruns also require the `workerkit` account. The core dependency must match
+the version required by the release notes before publication.
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ## Legal
@@ -227,11 +346,3 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 This CLI is released under the [MIT License](LICENSE). That covers the software itself; using it
 against WorkerKit's hosted API is separately governed by the Terms of Service above.
-
-### Classify then act
-
-A hybrid worker keeps its language instruction and a schema-3 classifier. Use `wk instruction get <tokenId>` to read both sections and the classifier revision. Attach with `wk decision set <tokenId> --decision-spec '<JSON>' --answers '{}' --updated-at null`; replace using the exact current revision, or remove with `--decision-spec null --updated-at '<revision>'`. Protected raw specs remain unavailable for replacement.
-
-`wk run` accepts source arguments, setup-answer overrides and a source cap alongside a language prompt/model. A waited receipt shows classification, one agent stage, confirmed draft references, separate model usage and the actual wallet charge. `--json` retains the full receipt. Hybrid runs are on demand. Recurring drafts and automatic retries of uncertain writes are unsupported.
-
-Hybrid availability depends on the connected server. An unavailable feature returns the server error; the CLI does not emulate classification or retry uncertain actions.

@@ -6,6 +6,55 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-11
+
+Requires `@workerkit/core` 0.3.16.
+
+### Added
+
+- Offline `wk instructions`, `wk tools list` and `wk tools describe` expose shared guidance and map all 105 tool names to CLI commands.
+- Full command help includes tool and parameter guidance, links related commands and identifies inputs available only through Manager tools.
+- Worker list tables show the owner returned by the API. Member credentials remain limited to their own workers.
+- `wk workers timezone <tokenId> --time-zone-id America/New_York` sets report and local-date timezone without changing explicit schedule overrides. `wk kit install --time-zone-id`, `wk workers create-action --time-zone-id` and `timeZoneId` in a decision creation request save the creator's selected zone. Omission uses UTC.
+- `wk support` reports errors, bugs, app requests and general questions. It prints a
+  `PE-XXXXXX` reference; support replies to the signed-in user's email.
+- Action worker commands: `wk workers action-options`, `create-action`, `tools`, `invoke` and
+  `invocation`. An Action worker exposes selected app tools with no model and is never deployed
+  or run. `invoke` reads JSON arguments from `--file`, `--arguments` or stdin, takes
+  `--idempotency-key` for writes, prints the full receipt and exits nonzero unless the call
+  succeeded. `wk kit install --slack-connection-id` pins an Action kit's Slack bot.
+- Choose a decision worker's classifier (Jev or OpenAI Decisions) independently of its language
+  model: `--decision-profile-id` on `wk deploy` and `wk deployment update`, `--decision-profile`
+  on `wk run` for one run, and `decisionProfileId` in kit and `wk decision create` documents.
+  `wk deployment models --json` lists the enabled profiles and their prices.
+- `wk apps github accounts|repos|branches` and `wk apps slack workspaces|conversations` find
+  GitHub targets and Slack channel IDs before an install. Both need the `discoverAppResources`
+  scope; keep following `nextPage` or `nextCursor` even when a filtered page is empty.
+- `wk kit install --github-selection` takes GitHub accounts with all or selected repository IDs.
+  When the preview requires an explicit selection, the install stops and says how to find one;
+  `{"accounts":[]}` sets GitHub up later.
+- `wk kit guide --section state` covers WorkerKit Records, memory options and focused context.
+- `wk apps connect nimble` prompts for the API key when no credential is passed.
+
+### Changed
+
+- `wk auth status` says which workers the key reaches (`Workers: all` or `Workers: N selected`), and `wk workers list` counts and empty states speak of the workers the key reaches, since a key may now be limited to selected workers.
+- `wk workers create-action` and `wk decision create` need the `createWorkers` scope instead of `publishKits` + `installKits`.
+- Command summaries come from the shared tool descriptions.
+- `wk runs bulk` refuses an entry with an unsupported control, such as the retired `preview`,
+  before sending any request.
+- `wk kit install` checks its JSON and ID flags before asking for confirmation.
+- Publication requires the `workerkit` account and a core dependency matching the release notes.
+
+### Removed
+
+- `wk kit stats`, whose API tool was retired, and download counts from kit search tables.
+
+### Fixed
+
+- `wk kit install` reads a numeric `appsNeedingConnection` count in the preview.
+- Help summaries handle abbreviations and parentheses without cutting sentences short.
+
 ## [0.3.2] - 2026-09-29
 
 ### Added
@@ -85,25 +134,6 @@ Parity with `@workerkit/core` 0.3.4 — decision workers, on the commands that a
   `--memory-profile` and `--self-facts-enabled` can now be changed on their own, without
   resending the whole instruction or piping one in. A closed stdin is read as "no text" rather
   than as an empty instruction, so the same call works unattended.
-
-### Fixed
-
-- **`wk run`** decided whether to confirm from the flags it was given, which was wrong in both
-  directions: `--wait-seconds` applies to any worker, so a plain language-worker run was met with
-  a decision-worker confirmation — and refused outright in a non-interactive session, where the
-  CLI declines to prompt. Meanwhile the invocation that acts on the most items, a bare
-  `wk run <tokenId>` against a live decision worker, was never confirmed at all. It now asks the
-  worker what it is (`modelType`) and confirms only a live decision run. The lookup fails open:
-  a key without `readWorkers`, a 404 or a dead network leaves `wk run` working exactly as before.
-
-### Internal
-
-- A coverage test over the hand-authored commands. Flags on a `mountTool` command are derived
-  from the core descriptor and cannot drift; the bespoke ones — `wk run`, `wk instruction set`,
-  `wk kit install`, the kit-authoring and secret-carrying writes — are hand-written, and every
-  gate in the repo stayed green while core 0.3.3's new parameters were simply unreachable. Each
-  schema key must now be reachable as a flag or a positional, or be named with the reason it is
-  not, so the next core bump fails loudly instead of silently.
 
 ## [0.2.1] - 2026-09-12
 

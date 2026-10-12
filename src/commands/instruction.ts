@@ -12,7 +12,6 @@ export function mountInstruction(program: Command): void {
   mountTool(instruction, "get", {
     tool: "instruction_get",
     positionals: ["tokenId"],
-    summary: "Show the worker's instruction, or a decision worker's routing table and install questions (--options-for <key> lists an app pick's live values)",
     render: (data) => {
       let body = data as {
         modelType?: string;
@@ -63,13 +62,11 @@ export function mountInstruction(program: Command): void {
   mountTool(instruction, "versions", {
     tool: "instruction_versions",
     positionals: ["tokenId"],
-    summary: "The instruction's version history, newest first",
   });
 
   mountTool(instruction, "version", {
     tool: "instruction_version_get",
     positionals: ["tokenId", "versionNumber"],
-    summary: "One earlier version's text (protected kits refuse)",
     render: (data) => {
       let body = data as { content?: string };
       if (body && typeof body.content === "string") return sanitizeText(body.content);
@@ -81,7 +78,6 @@ export function mountInstruction(program: Command): void {
     tool: "instruction_restore",
     positionals: ["tokenId", "versionNumber"],
     confirm: (p) => `Restore version ${p.versionNumber} of worker ${p.tokenId}'s instruction? (appends a new version; reversible)`,
-    summary: "Roll the instruction back to an earlier version (appends a new version, so it is itself reversible)",
   });
 
   const set = instruction

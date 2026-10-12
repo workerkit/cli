@@ -66,7 +66,7 @@ describe.skipIf(!existsSync(dist))('hybrid commands on the wire', () => {
   it('preserves hybrid receipt JSON and sends combined run inputs', async () => {
     const result = await wk(['run', '42', '--prompt', 'Draft concise replies', '--source-args', '{"query":"test"}', '--max-items', '20', '--wait-seconds', '55', '--json']);
     expect(result.code, result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject(receipt);
+    expect(JSON.parse(result.stdout)).toEqual(receipt);
     expect(calls.at(-1)?.body).toMatchObject({ prompt: 'Draft concise replies', sourceArgs: { query: 'test' }, maxItems: 20, waitSeconds: 55 });
   });
   it('renders exact draft evidence and combined wallet charge', async () => {
@@ -76,5 +76,11 @@ describe.skipIf(!existsSync(dist))('hybrid commands on the wire', () => {
     expect(result.stdout).toContain('draft-123');
     expect(result.stdout).toContain('Wallet charge: $0.12');
     expect(result.stdout).toContain('Language: 1 calls');
+    expect(result.stdout).toContain('walletChargeUsd is committed wallet cost');
+    expect(result.stdout).toContain('unknown coverage is not complete');
+    expect(result.stdout).toContain('2xx without an action result ID is unknown');
+    const json = await wk(['runs', 'get', receipt.runId, '--json']);
+    expect(json.code, json.stderr).toBe(0);
+    expect(JSON.parse(json.stdout)).toEqual(receipt);
   });
 });

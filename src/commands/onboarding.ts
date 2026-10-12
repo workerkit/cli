@@ -4,7 +4,6 @@ import { mountTool } from "../bind.js";
 export function mountOnboarding(program: Command): void {
   mountTool(program, "onboarding", {
     tool: "onboarding_get",
-    summary: "Check model funding and the next human setup steps",
   });
   const wallet = program.command("wallet").description("Inspect funding and request a human-confirmed payment");
   mountTool(wallet, "balance", { tool: "wallet_get" });

@@ -49,6 +49,7 @@ export function mountRun(program: Command): void {
     .description("Trigger a worker to run now")
     .argument("<tokenId>")
     .option("-p, --prompt <text>", "Language and hybrid workers: extra instruction for this run only (<=8000 chars)")
+    .option("--decision-profile <id>", "Workers with classification: override the classifier for this run (see deployment models)")
     .option("--model <slug>", "Language and hybrid workers: override the model for this run")
     .option("--source-args <json>", "Workers with classification: narrow what is decided about (JSON object, merged over the spec's source args)")
     .option("--answers <json>", "Workers with classification: per-run answers to the install questions (JSON object of key → value, laid over the stored answers for this run only)")
@@ -57,7 +58,7 @@ export function mountRun(program: Command): void {
     .option("-f, --follow", "Stay attached and stream the run's events until it settles");
 
   cmd.action(async (tokenId: string, options: {
-    prompt?: string; model?: string; follow?: boolean;
+    prompt?: string; model?: string; decisionProfile?: string; follow?: boolean;
     sourceArgs?: string; answers?: string; maxItems?: string; waitSeconds?: string;
   }) => {
     const globals = globalOpts(cmd);
@@ -67,6 +68,7 @@ export function mountRun(program: Command): void {
     const params: Record<string, unknown> = { tokenId: Number(tokenId) };
     if (options.prompt !== undefined) params.prompt = options.prompt;
     if (options.model !== undefined) params.modelSlug = options.model;
+    if (options.decisionProfile !== undefined) params.decisionProfileId = options.decisionProfile;
     if (options.maxItems !== undefined) params.maxItems = Number(options.maxItems);
     if (options.waitSeconds !== undefined) params.waitSeconds = Number(options.waitSeconds);
     if (options.sourceArgs !== undefined) {
@@ -107,7 +109,7 @@ export function mountRun(program: Command): void {
       {
         tool: "worker_run",
         positionals: ["tokenId"],
-        hidden: ["prompt", "modelSlug", "sourceArgs", "answers", "maxItems", "waitSeconds"],
+        hidden: ["prompt", "modelSlug", "decisionProfileId", "sourceArgs", "answers", "maxItems", "waitSeconds"],
         render: (data) => {
           const hybrid = renderHybridReceipt(data);
           if (hybrid !== null) return hybrid;

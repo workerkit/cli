@@ -15,7 +15,6 @@ interface KitCard {
   jobSentence?: string | null;
   publisherSlug?: string | null;
   modelType?: string | null;
-  downloads?: number | null;
   stars?: number | null;
 }
 
@@ -40,7 +39,6 @@ export function mountKit(program: Command): void {
 
   mountTool(kit, "search", {
     tool: "kits_search",
-    summary: "Search the public kit directory (works before sign-in)",
     render: (data) => {
       const body = data as { items?: KitCard[] };
       if (!Array.isArray(body.items)) return null;
@@ -56,7 +54,6 @@ export function mountKit(program: Command): void {
         { header: "JOB", value: (k) => k.jobSentence ?? "", maxWidth: 48 },
         { header: "TYPE", value: (k) => k.modelType ?? "language" },
         { header: "PUBLISHER", value: (k) => k.publisherSlug ?? "" },
-        { header: "DL", value: (k) => String(k.downloads ?? "") },
       ]);
     },
   });
@@ -64,18 +61,10 @@ export function mountKit(program: Command): void {
   mountTool(kit, "get", {
     tool: "kit_get",
     positionals: ["slug"],
-    summary: "A kit's full public detail: permissions, instruction, install form",
-  });
-
-  mountTool(kit, "stats", {
-    tool: "kit_stats",
-    positionals: ["slug"],
-    summary: "A kit's usage stats",
   });
 
   mountTool(kit, "categories", {
     tool: "directory_overview",
-    summary: "The directory's filter vocabulary: categories, apps, models, sorts",
   });
 
   // ── install: preview → confirm → install, secrets shown once ──────────────────────────────────
@@ -85,8 +74,11 @@ export function mountKit(program: Command): void {
     .argument("<slug>")
     .option("--operator-id <uuid>", "Operator (workspace) to install into")
     .option("--title <text>", "Name for the new worker")
+    .option("--time-zone-id <zone>", "Worker timezone for reports and daily schedules, for example America/New_York")
+    .option("--slack-connection-id <id>", "Action kits: Slack bot connection from the preview actionConnections")
     .option("--avatar <slug>", "Avatar for the new worker")
     .option("--category-choices <json>", "One entry per preview categorySlots slot (JSON array)")
+    .option("--github-selection <json>", "GitHub accounts and repository IDs (JSON object); use preview.githubAccounts for connection IDs. An empty accounts array defers GitHub setup.")
     .option("--inputs <json>", "Answers to the preview's requiredInputs (JSON object)")
     .option("--memory-answers <json>", "Answers to the preview's memorySetup questions (JSON object)")
     .option(
@@ -116,7 +108,8 @@ export function mountKit(program: Command): void {
       requiredInputs?: Array<{ key?: string; label?: string }>;
       modelType?: string;
       decisionSetup?: DecisionSetupQuestion[];
-      appsNeedingConnection?: Array<{ app?: string } | string>;
+      appsNeedingConnection?: number | Array<{ app?: string } | string>;
+      githubSetup?: { explicitSelectionRequired?: boolean } | null;
       limits?: { currentWorkers?: number; maxWorkers?: number };
     };
 
@@ -127,7 +120,7 @@ export function mountKit(program: Command): void {
 
     if (!globals.json) {
       const required = (previewBody.requiredInputs ?? []).map((i) => i.key ?? "?");
-      const needing = (previewBody.appsNeedingConnection ?? []).map((a) =>
+      const needing = (Array.isArray(previewBody.appsNeedingConnection) ? previewBody.appsNeedingConnection : []).map((a) =>
         typeof a === "string" ? a : (a.app ?? "?"),
       );
       process.stdout.write(`${bold(`Installing kit ${slug}`)}\n`);
@@ -145,6 +138,8 @@ export function mountKit(program: Command): void {
         process.stdout.write(
           `${yellow("Apps needing connection after install:")} ${sanitizeInline(needing.join(", "))}\n`,
         );
+      else if (typeof previewBody.appsNeedingConnection === "number" && previewBody.appsNeedingConnection > 0)
+        process.stdout.write(`${yellow("Apps needing connection after install:")} ${previewBody.appsNeedingConnection}\n`);
       if (previewBody.limits)
         process.stdout.write(
           `Workers: ${previewBody.limits.currentWorkers ?? "?"}/${previewBody.limits.maxWorkers ?? "?"}\n`,
@@ -182,22 +177,48 @@ export function mountKit(program: Command): void {
       return;
     }
 
-    if (!(await confirm(`Install ${slug} as a new worker?`, globals.yes))) {
-      if (!process.exitCode) process.exitCode = 2;
+    const installParams: Record<string, unknown> = { slug };
+    if (previewBody.githubSetup?.explicitSelectionRequired && options.githubSelection === undefined) {
+      process.stderr.write('GitHub targets are required. Use `wk apps github accounts` and `wk apps github repos`, then pass --github-selection with explicit repository IDs. To set up later, pass --github-selection \'{"accounts":[]}\'.\n');
+      process.exitCode = 2;
       return;
     }
-
-    const installParams: Record<string, unknown> = { slug };
     if (options.operatorId) installParams.operatorId = options.operatorId;
     if (options.title) installParams.title = options.title;
     if (options.avatar) installParams.avatar = options.avatar;
+    if (options.githubSelection !== undefined) {
+      const githubSelection = safeJson(options.githubSelection);
+      if (!githubSelection || typeof githubSelection !== "object" || Array.isArray(githubSelection)) {
+        process.stderr.write("--github-selection must be a JSON object with an accounts array.\n");
+        process.exitCode = 2; return;
+      }
+      const selectionSchema = installDescriptor.schema.githubSelection;
+      if (!selectionSchema) throw new Error("The installed core package does not support GitHub selections");
+      const validated = selectionSchema.safeParse(githubSelection);
+      if (!validated.success) {
+        process.stderr.write(`Invalid GitHub selection: ${validated.error.issues.map(issue => issue.message).join("; ")}\n`);
+        process.exitCode = 2; return;
+      }
+      installParams.githubSelection = validated.data;
+    }
     const categoryChoices = safeJson(options.categoryChoices);
     if (categoryChoices) installParams.categoryChoices = categoryChoices;
     const inputs = safeJson(options.inputs);
     if (inputs) installParams.inputs = inputs;
+    if (options.timeZoneId !== undefined) installParams.timeZoneId = options.timeZoneId;
     const memoryAnswers = safeJson(options.memoryAnswers);
     if (memoryAnswers) installParams.memoryAnswers = memoryAnswers;
+    if (options.slackConnectionId !== undefined) {
+      const id = Number(options.slackConnectionId);
+      if (!Number.isSafeInteger(id) || id < 1) { process.stderr.write("slack-connection-id must be a positive integer.\n"); process.exitCode = 2; return; }
+      installParams.slackConnectionId = id;
+    }
     if (decisionAnswers) installParams.decisionAnswers = decisionAnswers;
+
+    if (!(await confirm(`Install ${slug} as a new worker?`, globals.yes))) {
+      if (!process.exitCode) process.exitCode = 2;
+      return;
+    }
 
     const result = await executeTool(client, installDescriptor, installParams, { token });
     if (!isSuccess(result)) {
@@ -257,7 +278,7 @@ function safeJson(value: unknown): unknown | null {
   try {
     return JSON.parse(value);
   } catch {
-    process.stderr.write("Invalid JSON in one of the --inputs/--category-choices/--memory-answers flags.\n");
+    process.stderr.write("Invalid JSON. Check --inputs, --category-choices, --memory-answers, --decision-answers or --github-selection.\n");
     process.exit(2);
   }
 }
@@ -267,7 +288,6 @@ export function mountPublisher(program: Command): void {
   mountTool(publisher, "get", {
     tool: "publisher_get",
     positionals: ["slug"],
-    summary: "A publisher's profile and kit list",
   });
   mountPublisherAuthoring(publisher);
 }

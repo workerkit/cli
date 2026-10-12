@@ -17,6 +17,9 @@ import { mountMcpServers } from "./commands/mcpServers.js";
 import { mountUpdate } from "./commands/update.js";
 import { mountDecision } from "./commands/decision.js";
 import { mountOnboarding } from "./commands/onboarding.js";
+import { mountSupport } from "./commands/support.js";
+import { mountGuidance } from "./commands/guidance.js";
+import { finalizeToolHelp } from "./bind.js";
 
 export function buildProgram(): Command {
   const program = new Command("wk");
@@ -60,6 +63,9 @@ export function buildProgram(): Command {
   mountUpdate(program);
   mountDecision(program);
   mountOnboarding(program);
+  mountSupport(program);
+  mountGuidance(program);
+  finalizeToolHelp(program);
 
   return program;
 }

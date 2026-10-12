@@ -38,7 +38,6 @@ export function mountDeliveries(program: Command): void {
   mountTool(deliveries, "list", {
     tool: "delivery_list",
     positionals: ["tokenId"],
-    summary: "A worker's delivery destinations",
     render: (data) => {
       const body = data as { deliveries?: DeliveryRow[] } | DeliveryRow[];
       const rows = Array.isArray(body) ? body : body.deliveries;
@@ -58,27 +57,23 @@ export function mountDeliveries(program: Command): void {
   mountTool(deliveries, "channels", {
     tool: "delivery_channels",
     positionals: ["tokenId"],
-    summary: "Which channels this account can deliver to right now (connection state per channel)",
   });
 
   mountTool(deliveries, "create", {
     tool: "delivery_create",
     positionals: ["tokenId", "channel"],
-    summary: "Add a destination: wk deliveries create <tokenId> <channel> --target '{...}' (a webhook's secret is shown once)",
     render: secretOnce,
   });
 
   mountTool(deliveries, "update", {
     tool: "delivery_update",
     positionals: ["tokenId", "deliveryId"],
-    summary: "Edit a destination (the channel is immutable — delete and recreate to change it)",
   });
 
   mountTool(deliveries, "rotate-secret", {
     tool: "delivery_secret_rotate",
     positionals: ["tokenId", "deliveryId"],
     confirm: (p) => `Rotate the signing secret of destination ${p.deliveryId}? The previous secret stops verifying immediately.`,
-    summary: "Mint a new webhook signing secret (shown once); the old one stops verifying at once",
     render: secretOnce,
   });
 
@@ -86,6 +81,5 @@ export function mountDeliveries(program: Command): void {
     tool: "delivery_delete",
     positionals: ["tokenId", "deliveryId"],
     confirm: (p) => `Delete delivery destination ${p.deliveryId} from worker ${p.tokenId}? (disable it with update --no-is-enabled to keep the configuration)`,
-    summary: "Delete a destination",
   });
 }

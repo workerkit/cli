@@ -11,10 +11,9 @@ export function mountDecision(program: Command): void {
   const decision = program.command("decision").description("Discover sources and create typed classification workers");
   mountTool(decision, "set", {
     tool: "worker_decision_set", positionals: ["tokenId"],
-    summary: "Attach or replace a classifier with --decision-spec JSON --answers JSON --updated-at timestamp (null when attaching); --decision-spec null removes it",
   });
-  mountTool(decision, "sources", { tool: "kit_app_tools", fixed: { purpose: "decision" }, hidden: ["purpose"], summary: "Classification source recipes, schemas, permissions and creation examples" });
-  mountTool(decision, "guide", { tool: "kit_authoring_guide", fixed: { section: "decision" }, hidden: ["section"], summary: "How to create, run and adjust a decision worker", render: data => {
+  mountTool(decision, "sources", { tool: "kit_app_tools", fixed: { purpose: "decision" }, hidden: ["purpose"],});
+  mountTool(decision, "guide", { tool: "kit_authoring_guide", fixed: { section: "decision" }, hidden: ["section"], render: data => {
     const body = data as { content?: string };
     return body.content ? sanitizeText(body.content) : null;
   } });

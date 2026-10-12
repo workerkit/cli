@@ -1,10 +1,18 @@
+import { readFileSync } from "node:fs";
+import { byName, executeTool, isSuccess, z } from "@workerkit/core";
+import { buildClient, requireToken } from "../context.js";
+import { parseJsonObject, readStdin } from "../input.js";
+import { renderApiError } from "../errors.js";
+import { sanitizeText } from "../output/sanitize.js";
 import type { Command } from "commander";
-import { mountTool } from "../bind.js";
+import { mountTool, globalOpts } from "../bind.js";
 import { renderTable, renderDetail } from "../output/table.js";
 import { bold, green, red, yellow } from "../output/colors.js";
 import { sanitizeInline } from "../output/sanitize.js";
 
 interface WorkerRow {
+  ownerUserId?: number;
+  ownerName?: string | null;
   workerId?: string;
   tokenId?: number;
   title?: string | null;
@@ -26,22 +34,55 @@ function paintStatus(status: string): string {
 export function mountWorkers(program: Command): void {
   const workers = program.command("workers").description("Manage your workers (list, inspect, start/stop)");
 
+  mountTool(workers, "timezone", {
+    tool: "worker_timezone_set", positionals: ["tokenId"],
+  });
+
+  mountTool(workers, "tools", { tool: "worker_tools", positionals: ["tokenId"],});
+  mountTool(workers, "action-options", { tool: "action_worker_options",});
+  workers.command("invoke <tokenId> <toolName>")
+    .description("Call one Action tool with JSON from --file, --arguments or stdin. Repeating a key with the same arguments returns the stored receipt; never retry an uncertain write with a new key.")
+    .option("--file <path>", "Read tool arguments from a JSON file")
+    .option("--arguments <json>", "Tool arguments as a JSON object (prefer a file for private content)")
+    .option("--idempotency-key <key>", "Unique key for this intended write; preserve it on retries")
+    .action(async (tokenId: string, toolName: string, options, cmd: Command) => {
+      const globals = globalOpts(cmd);
+      if (options.file && options.arguments) { process.stderr.write("Choose --file or --arguments.\n"); process.exitCode = 2; return; }
+      const raw = options.file ? readFileSync(options.file, "utf8") : options.arguments ?? (!process.stdin.isTTY ? await readStdin() : null);
+      if (raw === null) { process.stderr.write("Provide --file, --arguments or JSON on stdin.\n"); process.exitCode = 2; return; }
+      const args = parseJsonObject(raw, "tool arguments");
+      if (!args) return;
+      const descriptor = byName("worker_tool_call")!;
+      const parsed = z.object(descriptor.schema).strict().safeParse({ tokenId: Number(tokenId), toolName, arguments: args, idempotencyKey: options.idempotencyKey });
+      if (!parsed.success) { process.stderr.write(parsed.error.message + "\n"); process.exitCode = 2; return; }
+      const token = await requireToken(globals.profile);
+      const result = await executeTool(buildClient(), descriptor, parsed.data, { token });
+      // Preserve the complete receipt even on a non-2xx result.
+      const text = JSON.stringify(result.data, null, 2);
+      process.stdout.write((globals.json ? text : sanitizeText(text)) + "\n");
+      const status = (result.data as { status?: string } | null)?.status;
+      if (!isSuccess(result)) process.exitCode = renderApiError(result, globals.json);
+      else if (status !== "succeeded") process.exitCode = 1;
+    });
+  mountTool(workers, "invocation", { tool: "worker_tool_invocation", positionals: ["tokenId", "invocationId"],});
+  mountTool(workers, "create-action", { tool: "action_worker_create",});
+
   mountTool(workers, "list", {
     tool: "workers_list",
-    summary: "List the workers on the account with status, readiness, deployment and run rollups (filterable)",
     render: (data) => {
       const body = data as { workers?: WorkerRow[]; totalWorkers?: number };
       if (!Array.isArray(body.workers)) return null;
       if (body.workers.length === 0) {
-        // totalWorkers is the unfiltered count: zero is an empty account, non-zero a filter that
-        // matched nothing — two different next steps.
+        // totalWorkers counts the workers this key reaches, unfiltered: zero means the key reaches
+        // nothing yet, non-zero a filter that matched nothing — two different next steps.
         return body.totalWorkers
-          ? `No workers match those filters (${body.totalWorkers} on the account).`
-          : "No workers yet. Install one with `wk kit search` + `wk kit install <slug>`.";
+          ? `No workers match those filters (${body.totalWorkers} reachable by this key).`
+          : "No workers this key can reach yet. Install one with `wk kit search` + `wk kit install <slug>`; it joins the key.";
       }
       return renderTable(body.workers, [
         { header: "ID", value: (w) => String(w.tokenId ?? "") },
         { header: "TITLE", value: (w) => w.title ?? "(untitled)", maxWidth: 32 },
+        { header: "OWNER", value: (w) => w.ownerName ?? (w.ownerUserId ? String(w.ownerUserId) : ""), maxWidth: 24 },
         { header: "STATUS", value: (w) => w.status ?? "?", paint: paintStatus },
         { header: "READY", value: (w) => w.readiness?.status ?? "" },
         { header: "DEPLOYED", value: (w) => (w.deployment ? "yes" : "") },
@@ -56,7 +97,6 @@ export function mountWorkers(program: Command): void {
   mountTool(workers, "get", {
     tool: "worker_get",
     positionals: ["tokenId"],
-    summary: "One worker's detail: status, kit, readiness, 30-day activity",
     render: (data) => {
       const w = data as WorkerRow & {
         jobSentence?: string | null;
@@ -96,14 +136,12 @@ export function mountWorkers(program: Command): void {
     tool: "worker_set_enabled",
     positionals: ["tokenId"],
     fixed: { enabled: true },
-    summary: "Start a worker: its API key works and schedules fire again",
   });
 
   mountTool(workers, "disable", {
     tool: "worker_set_enabled",
     positionals: ["tokenId"],
     fixed: { enabled: false },
-    summary: "Stop a worker: pauses its API key AND all of its schedules",
     confirm: (p) => `Stop worker ${p.tokenId}? Its key stops working and schedules stop firing.`,
   });
 
@@ -113,27 +151,23 @@ export function mountWorkers(program: Command): void {
     confirm: (p) =>
       `PERMANENTLY delete worker ${p.tokenId}? Its key stops, its schedules stop, and its SUB-WORKERS go with it. ` +
       "Nothing undoes this (`wk workers disable` is the reversible stop).",
-    summary: "Delete a worker permanently, with its sub-workers (`disable` is the reversible stop)",
   });
 
   mountTool(workers, "permissions", {
     tool: "worker_permissions_get",
     positionals: ["tokenId"],
-    summary: "What a worker may touch, in the kit-authoring vocabulary (read-only), plus how many rules it carries",
   });
 
   // ── creation by cloning: the only non-kit creation path; each new key is shown once ────────
   mountTool(workers, "clone-preview", {
     tool: "worker_clone_preview",
     positionals: ["tokenId"],
-    summary: "What a clone WOULD create: apps, counts of what travels, blockers. Creates nothing",
   });
 
   mountTool(workers, "clone", {
     tool: "worker_clone",
     positionals: ["tokenId"],
     confirm: (p) => `Clone worker ${p.tokenId} into a new worker${p.title ? ` "${String(p.title)}"` : ""}? Its permissions AND restriction rules travel.`,
-    summary: "Clone a worker into a new one (run clone-preview first); the new key is shown ONCE",
     render: cloneResult,
   });
 
@@ -141,20 +175,17 @@ export function mountWorkers(program: Command): void {
     tool: "worker_clone_bulk",
     positionals: ["tokenId"],
     confirm: (p) => `Clone worker ${p.tokenId} into ${Array.isArray(p.workers) ? p.workers.length : "several"} new workers? Not atomic — read items[] rather than the status.`,
-    summary: "Clone a worker into up to 20 new ones: --workers '[{\"title\":\"...\"}, ...]'; each new key is shown ONCE",
     render: cloneBulkResult,
   });
 
   mountTool(workers, "budget", {
     tool: "budget_get",
     positionals: ["tokenId"],
-    summary: "A worker's spend and rate ceilings",
   });
 
   mountTool(workers, "budget-set", {
     tool: "budget_set",
     positionals: ["tokenId"],
-    summary: "Change a worker's spend / rate ceilings and its question timeout (omitted fields unchanged)",
   });
 }
 

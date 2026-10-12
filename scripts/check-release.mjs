@@ -25,4 +25,8 @@ const [heading, ...body] = matches[0].split("\n");
 assert.match(heading, / - \d{4}-\d{2}-\d{2}$/, "Release notes need a date");
 const notes = body.join("\n").trim();
 assert.ok(notes.length > 40, "Release notes must describe the changes");
+const requiredCore = notes.match(/^Requires `@workerkit\/core` (\d+\.\d+\.\d+)\.$/m)?.[1];
+assert.ok(requiredCore, "Release notes must declare the required @workerkit/core version");
+assert.equal(pkg.dependencies["@workerkit/core"], requiredCore,
+  "The @workerkit/core pin must match this release's requirement; publish the reviewed core version and update the registry lockfile first");
 process.stdout.write(notes + "\n");

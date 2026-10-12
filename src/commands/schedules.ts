@@ -17,7 +17,6 @@ export function mountSchedules(program: Command): void {
   mountTool(schedules, "list", {
     tool: "schedules_list",
     positionals: ["tokenId"],
-    summary: "List a worker's schedules with next fire times",
     render: (data) => {
       const body = data as { schedules?: ScheduleRow[] } | ScheduleRow[];
       const rows = Array.isArray(body) ? body : body.schedules;
@@ -36,19 +35,16 @@ export function mountSchedules(program: Command): void {
   mountTool(schedules, "create", {
     tool: "schedule_create",
     positionals: ["tokenId"],
-    summary: "Create a schedule (see --help for the type-specific fields)",
   });
 
   mountTool(schedules, "update", {
     tool: "schedule_update",
     positionals: ["tokenId", "scheduleId"],
-    summary: "Edit a schedule (partial: only the flags you pass change)",
   });
 
   mountTool(schedules, "delete", {
     tool: "schedule_delete",
     positionals: ["tokenId", "scheduleId"],
     confirm: (p) => `Delete schedule ${p.scheduleId} from worker ${p.tokenId}?`,
-    summary: "Delete a schedule",
   });
 }

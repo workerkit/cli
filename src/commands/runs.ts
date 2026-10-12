@@ -49,7 +49,6 @@ export function mountRuns(program: Command): void {
   mountTool(runs, "list", {
     tool: "worker_runs",
     positionals: ["tokenId"],
-    summary: "A worker's run history, newest first",
     render: (data) => {
       const body = data as { runs?: RunRow[] };
       if (!Array.isArray(body.runs)) return null;
@@ -61,45 +60,38 @@ export function mountRuns(program: Command): void {
   mountTool(runs, "get", {
     tool: "run_get",
     positionals: ["runId"],
-    summary: "One run's full receipt",
     render: renderHybridReceipt,
   });
 
   mountTool(runs, "events", {
     tool: "run_events",
     positionals: ["runId"],
-    summary: "One page of a run's event feed (single poll; see `wk runs tail`)",
   });
 
   mountTool(runs, "cancel", {
     tool: "run_cancel",
     positionals: ["runId"],
-    summary: "Cancel an in-flight run",
   });
 
   mountTool(runs, "transcript", {
     tool: "run_transcript",
     positionals: ["runId"],
-    summary: "The run's stored LLM process log (opt-in per deployment; 404 no_transcript otherwise)",
   });
 
   mountTool(runs, "bulk", {
     tool: "run_bulk",
     confirm: (p) =>
       `Run ${Array.isArray(p.workers) ? p.workers.length : "several"} workers now? Not atomic — read items[] rather than the status.`,
-    summary: "Run up to 20 workers now: --workers '[{\"workerId\":\"...\",\"prompt\":\"...\"}, ...]' (not atomic; read items[])",
   });
 
   mountTool(runs, "clear-digest", {
     tool: "run_clear_digest",
     positionals: ["runId"],
     confirm: (p) => `Permanently clear the stored digest of run ${p.runId}?`,
-    summary: "Scrub a run's stored digest text",
   });
 
   mountTool(runs, "feed", {
     tool: "runs_feed",
-    summary: "The account-wide run feed, newest first (cursor-paged; the API's `wait` turns it into a long poll)",
     render: (data) => {
       const body = data as { runs?: RunRow[]; items?: RunRow[] };
       const rows = body.runs ?? body.items;
@@ -112,13 +104,11 @@ export function mountRuns(program: Command): void {
   mountTool(runs, "question", {
     tool: "run_question",
     positionals: ["runId"],
-    summary: "The question a run ended by asking its owner (status awaitingInput)",
   });
 
   mountTool(runs, "answer", {
     tool: "run_answer",
     positionals: ["runId", "answer"],
-    summary: "Answer a run's question: mints a LINKED follow-on run (the run id changes)",
   });
 
   const scoreSpec = {

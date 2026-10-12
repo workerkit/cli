@@ -23,7 +23,6 @@ export function mountAuth(program: Command): void {
 
   mountTool(auth, "key-info", {
     tool: "key_info",
-    summary: "What the current key is: account, scopes (exactly what the other commands will accept), expiry",
   });
 
   const login = auth
@@ -139,7 +138,9 @@ export function mountAuth(program: Command): void {
           return;
         }
         if (isSuccess(check)) {
-          process.stdout.write(`${green("Key is valid.")}\n`);
+          const info = check.data as { allWorkers?: boolean; workerIds?: string[] } | undefined;
+          const reach = info?.allWorkers === false ? `${info.workerIds?.length ?? 0} selected` : "all";
+          process.stdout.write(`${green("Key is valid.")} Workers: ${reach}.\n`);
         } else {
           process.stdout.write(`Key check failed (HTTP ${check.status}).\n`);
           process.exitCode = check.status === 401 || check.status === 403 ? 3 : 1;
