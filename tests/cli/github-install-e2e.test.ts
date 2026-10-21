@@ -26,10 +26,11 @@ beforeAll(async () => {
 });
 afterAll(() => { server.close(); });
 
-function install(selection?: unknown): Promise<{ code: number | null; stderr: string }> {
+function install(selection?: unknown, workerBindings?: unknown): Promise<{ code: number | null; stderr: string }> {
   return new Promise((resolve, reject) => {
     const args = [dist, "kit", "install", "github-triage", "--yes", "--json"];
     if (selection !== undefined) args.push("--github-selection", JSON.stringify(selection));
+    if (workerBindings !== undefined) args.push("--worker-bindings", JSON.stringify(workerBindings));
     const child = spawn(process.execPath, args, { env: { ...process.env, WK_API_BASE_URL: baseUrl,
       WK_CONFIG_DIR: configDir, WK_MANAGER_KEY: "pe_mgr_github_test", WK_NO_UPDATE_CHECK: "1", CI: "1" }, stdio: "pipe" });
     let stderr = "";
@@ -42,6 +43,15 @@ function install(selection?: unknown): Promise<{ code: number | null; stderr: st
 }
 
 describe("kit GitHub selections on the wire", () => {
+  it("forwards explicit worker bindings and rejects malformed worker IDs", async () => {
+    const workerBindings = { research: "11111111-1111-4111-8111-111111111111" };
+    const result = await install(undefined, workerBindings);
+    expect(result.code, result.stderr).toBe(0);
+    expect(installs.at(-1)).toMatchObject({ workerBindings });
+    const count = installs.length;
+    expect((await install(undefined, { research: "pe_secret" })).code).toBe(2);
+    expect(installs).toHaveLength(count);
+  });
   it("forwards multiple accounts and explicit setup later without widening selections", async () => {
     for (const accounts of [[], [
       { connectionId: 7, repositoryMode: "selected", repositoryIds: [101, 102] },

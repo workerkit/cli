@@ -1,4 +1,4 @@
-import { renderHybridReceipt } from "../output/runReceipt.js";
+import { renderHybridReceipt, renderRunAttribution, renderRunResult } from "../output/runReceipt.js";
 import type { Command } from "commander";
 import { byName, executeTool, isSuccess } from "@workerkit/core";
 import { mountTool, runTool, globalOpts } from "../bind.js";
@@ -177,6 +177,7 @@ export async function tailRun(runId: string, json: boolean, profile?: string): P
   let afterSeq = 0;
   let cycles = 0;
   let transportBlips = 0;
+  let terminalSeen = false;
   let interrupted = false;
   const controller = new AbortController();
   const onSigint = () => {
@@ -211,36 +212,48 @@ export async function tailRun(runId: string, json: boolean, profile?: string): P
       }
       transportBlips = 0;
 
-      const body = events.data as { events?: RunEvent[] };
+      const body = events.data as { events?: RunEvent[]; lastSeq?: number; hasMore?: boolean };
+      let newEvents = 0;
       for (const event of body.events ?? []) {
-        if (typeof event.seq === "number" && event.seq > afterSeq) afterSeq = event.seq;
+        if (typeof event.seq !== "number" || event.seq <= afterSeq) continue;
+        afterSeq = event.seq;
+        newEvents++;
         const line =
           `${dim(sanitizeInline(event.atUtc ?? ""))} ${bold(sanitizeInline(event.kind ?? "event"))} ` +
           sanitizeInline(event.label ?? event.message ?? "");
         if (json) process.stdout.write(JSON.stringify(event) + "\n");
         else process.stdout.write(line.trim() + "\n");
       }
+      if (typeof body.lastSeq === "number" && Number.isInteger(body.lastSeq)) afterSeq = Math.max(afterSeq, body.lastSeq);
 
       cycles++;
-      if (cycles === 1 || cycles % 3 === 0 || (body.events ?? []).length === 0) {
+      if (terminalSeen || cycles === 1 || cycles % 3 === 0 || newEvents === 0) {
         const run = await executeTool(client, runDescriptor, { runId }, { token, signal: controller.signal });
         if (interrupted) continue;
         if (!isSuccess(run)) return renderApiError(run, json);
         if (isSuccess(run)) {
-          const receipt = run.data as { status?: string; finalDigest?: string | null; ownerScore?: number | null };
+          const receipt = run.data as { status?: string; finalDigest?: string | null; ownerScore?: number | null; finishedAtUtc?: string | null };
           const status = sanitizeInline(receipt.status ?? "");
           const normalized = status.toLowerCase();
-          if (TERMINAL_STATUSES.has(normalized)) {
+          const terminal = TERMINAL_STATUSES.has(normalized)
+            && !(normalized === "canceled" && receipt.finishedAtUtc === null);
+          // Read-only recovery: drain retained pages and give the runtime one quiet poll to
+          // deliver its final events. A cancellation signal is not completed settlement.
+          if (terminal && terminalSeen && body.hasMore !== true && newEvents === 0) {
             if (json) process.stdout.write(JSON.stringify(run.data) + "\n");
             else {
               process.stdout.write(`\n${bold("Run settled:")} ${paintRunStatus(status)}\n`);
               const hybrid = renderHybridReceipt(run.data);
               if (hybrid) process.stdout.write(hybrid + "\n");
-              else if (receipt.finalDigest) process.stdout.write(`${sanitizeText(String(receipt.finalDigest))}\n`);
+              else {
+                process.stdout.write([...renderRunAttribution(receipt), ...renderRunResult(receipt)].join("\n") + "\n");
+                if (receipt.finalDigest) process.stdout.write(`${sanitizeText(String(receipt.finalDigest))}\n`);
+              }
               if (normalized === "awaitinginput") process.stdout.write(`Read the question with: wk runs question ${runId}\n`);
             }
             return ["succeeded", "skipped", "awaitinginput"].includes(normalized) ? 0 : 1;
           }
+          terminalSeen = terminal;
         }
       }
 

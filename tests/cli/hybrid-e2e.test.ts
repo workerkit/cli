@@ -11,6 +11,7 @@ const configDir = mkdtempSync(join(tmpdir(), "wk-decision-test-"));
 const calls: Array<{ url: string; auth?: string; body: unknown }> = [];
 const sourceId = 'mail-' + 'x'.repeat(240);
 const receipt = { kind: 'hybrid', runId: '11111111-1111-4111-8111-111111111111', status: 'Succeeded', finalDigest: 'Drafted one reply',
+  initiator: { kind: 'fleetKey', userId: 7, managerKey: { id: 31, name: 'Research fleet', prefix: 'pe_mgr_display' } },
   modelCostUsd: 2.4, walletChargeUsd: 0.12, billingMode: 'Byok',
   decision: { calls: 20, outcome: 'Five eligible', decisions: [{ id: sourceId, route: 'agent' }] },
   agent: { status: 'completed', selectedCount: 5, eligibleCount: 5, actions: [{ tool: 'email_create_reply_draft', sourceId, status: 'confirmed', resultReferences: { draftId: 'draft-123' } }] },
@@ -21,6 +22,11 @@ const server = createServer(async (req, res) => {
   for await (const chunk of req) raw += chunk;
   calls.push({ url: req.url!, auth: req.headers.authorization, body: raw ? JSON.parse(raw) : null });
   res.writeHead(200, { 'content-type': 'application/json' });
+  if (req.url?.includes('includeContent=false')) {
+    res.end(JSON.stringify({ runId: receipt.runId, status: receipt.status, initiator: receipt.initiator,
+      contentWithheld: true, contentReferences: [{ kind: 'report' }] }));
+    return;
+  }
   res.end(JSON.stringify(req.url?.includes('/instruction')
     ? { modelType: 'hybrid', instruction: { content: 'Draft replies only.' }, decision: { narration: 'Classify support questions.', setup: [] } }
     : req.url === '/api/manage/workers/42' ? { modelType: 'hybrid' } : receipt));
@@ -47,6 +53,13 @@ function wk(args: string[], input?: string): Promise<{ code: number | null; stdo
 
 
 describe.skipIf(!existsSync(dist))('hybrid commands on the wire', () => {
+  it('requests receipt metadata without result content through the generated flag', async () => {
+    const result = await wk(['runs', 'get', receipt.runId, '--no-include-content', '--json']);
+    expect(result.code, result.stderr).toBe(0);
+    expect(calls.at(-1)?.url).toBe(`/api/manage/workers/runs/${receipt.runId}?includeContent=false`);
+    expect(JSON.parse(result.stdout)).toEqual({ runId: receipt.runId, status: receipt.status,
+      initiator: receipt.initiator, contentWithheld: true, contentReferences: [{ kind: 'report' }] });
+  });
   it('attaches and removes with required explicit nullable fields', async () => {
     const spec = { schemaVersion: 3, agentAction: { maxItems: 5 } };
     const attached = await wk(['decision', 'set', '42', '--decision-spec', JSON.stringify(spec), '--answers', '{}', '--updated-at', 'null', '--json']);
@@ -75,6 +88,8 @@ describe.skipIf(!existsSync(dist))('hybrid commands on the wire', () => {
     expect(result.stdout).toContain(sourceId);
     expect(result.stdout).toContain('draft-123');
     expect(result.stdout).toContain('Wallet charge: $0.12');
+    expect(result.stdout).toContain('Started by: Fleet key Research fleet (#31, pe_mgr_display)');
+    expect(result.stdout).toContain('Accountable user: #7');
     expect(result.stdout).toContain('Language: 1 calls');
     expect(result.stdout).toContain('walletChargeUsd is committed wallet cost');
     expect(result.stdout).toContain('unknown coverage is not complete');

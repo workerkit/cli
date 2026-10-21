@@ -14,9 +14,11 @@ let status = "Succeeded";
 let eventStatus = 200;
 let receiptStatus = 200;
 let eventCalls = 0;
+let latePages = false;
 let hang = false;
 let signalChild: (() => void) | undefined;
 const receipt = () => ({ kind: "hybrid", runId, status, finalDigest: "Draft ready", walletChargeUsd: 0.12,
+  finishedAtUtc: latePages && eventCalls === 1 ? null : "2026-10-14T00:00:00Z",
   agent: { status: "completed", actions: [{ tool: "email_create_reply_draft", sourceId: "mail-1", status: "confirmed", resultReferences: { draftId: "draft-123" } }] } });
 const server = createServer((req, res) => {
   if (req.url?.includes("/events")) {
@@ -24,7 +26,10 @@ const server = createServer((req, res) => {
     if (hang) { signalChild?.(); return; }
     res.writeHead(eventStatus, { "content-type": "application/json", "retry-after": "100000" });
     res.end(JSON.stringify(eventStatus === 429 ? { code: "QUOTA_EXCEEDED" } : {
-      events: [{ seq: 1, kind: "tool", label: "Draft created\u001b[2J" }],
+      events: latePages
+        ? eventCalls <= 2 ? [{ seq: eventCalls, kind: "tool", label: eventCalls === 1 ? "First page" : "Late confirmation" }] : []
+        : [{ seq: 1, kind: "tool", label: "Draft created\u001b[2J" }],
+      hasMore: latePages && eventCalls === 1,
     }));
   } else {
     res.writeHead(receiptStatus, { "content-type": "application/json" });
@@ -50,7 +55,7 @@ function tail(json = false): Promise<{ code: number | null; stdout: string; stde
       stdio: "pipe",
     });
     signalChild = () => { child.kill("SIGINT"); };
-    const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("Tail failed to settle within its test deadline")); }, 4000);
+    const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("Tail failed to settle within its test deadline")); }, 18000);
     let stdout = "", stderr = "";
     child.stdout.on("data", data => { stdout += data; });
     child.stderr.on("data", data => { stderr += data; });
@@ -72,7 +77,7 @@ it.each([
   expect(result.stdout).toContain("draft-123");
   expect(result.stdout).toContain("Wallet charge: $0.12");
   if (value === "AwaitingInput") expect(result.stdout).toContain("wk runs question");
-});
+}, 20000); // Settling waits one quiet poll interval for late events.
 
 it("keeps raw events and receipts in JSONL", async () => {
   status = "Succeeded";
@@ -81,7 +86,19 @@ it("keeps raw events and receipts in JSONL", async () => {
   const lines = result.stdout.trim().split("\n").map(line => JSON.parse(line));
   expect(lines[0].label).toBe("Draft created\u001b[2J");
   expect(lines[1]).toEqual(receipt());
-});
+}, 20000);
+
+it("drains later pages and waits for canceled settlement without repeating an action", async () => {
+  status = "Canceled"; eventCalls = 0; latePages = true;
+  try {
+    const result = await tail();
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("First page");
+    expect(result.stdout).toContain("Late confirmation");
+    expect(eventCalls).toBeGreaterThanOrEqual(3);
+    expect(eventCalls).toBeLessThanOrEqual(4);
+  } finally { latePages = false; }
+}, 20000);
 
 it("stops on a quota wall or unreadable receipt instead of polling forever", async () => {
   eventStatus = 429;

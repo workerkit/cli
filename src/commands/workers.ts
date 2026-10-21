@@ -34,6 +34,11 @@ function paintStatus(status: string): string {
 export function mountWorkers(program: Command): void {
   const workers = program.command("workers").description("Manage your workers (list, inspect, start/stop)");
 
+  const quality = workers.command("quality").description("Review quality criteria and gates; owner-only improvement controls are in the dashboard");
+  mountTool(quality, "get", { tool: "worker_quality_get", positionals: ["tokenId"] });
+  mountTool(quality, "set", { tool: "worker_quality_set", positionals: ["tokenId"] });
+  mountTool(quality, "preview", { tool: "worker_quality_preview", positionals: ["tokenId"] });
+
   mountTool(workers, "timezone", {
     tool: "worker_timezone_set", positionals: ["tokenId"],
   });
@@ -158,6 +163,33 @@ export function mountWorkers(program: Command): void {
     positionals: ["tokenId"],
   });
 
+  mountTool(workers, "permissions-set", {
+    tool: "worker_permissions_set",
+    positionals: ["tokenId"],
+    confirm: (p) =>
+      `Replace what worker ${p.tokenId} may touch with ${Array.isArray(p.apps) ? p.apps.length : "the given"} app(s)? Apps left out are switched OFF.`,
+  });
+
+  // ── grants to call other workers: the kit's slots and any free alias ──────────────────────
+  mountTool(workers, "bindings", {
+    tool: "worker_bindings_get",
+    positionals: ["tokenId"],
+    render: renderBindings,
+  });
+
+  mountTool(workers, "bindings-set", {
+    tool: "worker_bindings_set",
+    positionals: ["tokenId"],
+    // Filling is reversible; clearing cancels the alias's in-flight child runs, so that asks first.
+    confirm: (p) => {
+      const map = (p.workerBindings ?? {}) as Record<string, unknown>;
+      const cleared = Object.keys(map).filter((alias) => map[alias] === null);
+      return cleared.length === 0 ? null
+        : `Clear ${cleared.join(", ")} on worker ${p.tokenId}? Their in-flight child runs are cancelled.`;
+    },
+    render: renderBindings,
+  });
+
   // ── creation by cloning: the only non-kit creation path; each new key is shown once ────────
   mountTool(workers, "clone-preview", {
     tool: "worker_clone_preview",
@@ -187,6 +219,37 @@ export function mountWorkers(program: Command): void {
     tool: "budget_set",
     positionals: ["tokenId"],
   });
+}
+
+interface BindingRow {
+  alias?: string;
+  title?: string | null;
+  workerId?: string;
+  modelType?: string;
+  operations?: number;
+  available?: boolean;
+}
+
+/** The grants, then the required slots still empty — the one line that explains a skipped run. */
+function renderBindings(data: unknown): string | null {
+  const body = data as { bindings?: BindingRow[]; missingSlots?: string[] | null };
+  if (!Array.isArray(body.bindings)) return null;
+  const lines = [
+    body.bindings.length === 0
+      ? "No grants to call other workers yet."
+      : renderTable(body.bindings, [
+          { header: "ALIAS", value: (b) => b.alias ?? "" },
+          { header: "WORKER", value: (b) => b.title ?? "(untitled)", maxWidth: 32 },
+          { header: "TYPE", value: (b) => b.modelType ?? "" },
+          { header: "OPS", value: (b) => String(b.operations ?? "") },
+          { header: "AVAILABLE", value: (b) => (b.available ? "yes" : "no") },
+          { header: "WORKER ID", value: (b) => b.workerId ?? "" },
+        ]),
+  ];
+  const missing = Array.isArray(body.missingSlots) ? body.missingSlots : [];
+  if (missing.length > 0)
+    lines.push(yellow(`Required slots still empty: ${sanitizeInline(missing.join(", "))} — runs stay skipped until \`wk workers bindings-set\` fills them.`));
+  return lines.join("\n");
 }
 
 interface CloneItem {

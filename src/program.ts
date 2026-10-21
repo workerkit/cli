@@ -13,6 +13,7 @@ import { mountDeliveries } from "./commands/deliveries.js";
 import { mountAccount, mountFleet } from "./commands/fleet.js";
 import { mountDeploy } from "./commands/deployment.js";
 import { mountApps, mountModelKeys } from "./commands/apps.js";
+import { mountApiApps } from "./commands/apiApps.js";
 import { mountMcpServers } from "./commands/mcpServers.js";
 import { mountUpdate } from "./commands/update.js";
 import { mountDecision } from "./commands/decision.js";
@@ -58,6 +59,7 @@ export function buildProgram(): Command {
   mountKit(program);
   mountPublisher(program);
   mountApps(program);
+  mountApiApps(program);
   mountModelKeys(program);
   mountMcpServers(program);
   mountUpdate(program);

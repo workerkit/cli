@@ -6,13 +6,21 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.3.3] - 2026-10-12
+## [0.3.4] - 2026-10-21
 
-Requires `@workerkit/core` 0.3.16.
+Requires `@workerkit/core` 0.3.19.
 
 ### Added
 
-- Offline `wk instructions`, `wk tools list` and `wk tools describe` expose shared guidance and map all 105 tool names to CLI commands.
+- `wk api-apps` lists, reads, creates, updates, validates and previews account-private API apps and publishes, reads or revokes their immutable versions. Definition requests use `--file` or stdin. Updates require the reviewed revision; authoring requires a live account Admin and `managePrivateApiApps`.
+- `wk workers bindings <tokenId>` and `wk workers bindings-set <tokenId> --worker-bindings '<json>'` read and set a worker's grants to call other workers: one atomic alias map fills, re-points or clears grants, a declared kit slot supplies its own operations and tools, and `null` clears an alias. Writes need the `manageAppsAndWorkers` scope.
+- `wk workers permissions-set <tokenId> --apps '<json>'` replaces a worker's app set in the vocabulary `wk workers permissions` prints (account Admin; apps left out are switched off), with optional `--contact-allow-all`, `--blocked-sender-categories`, `--timeframe-past-days`, `--timeframe-future-days` and `--max-child-tokens`. Needs the `manageAppsAndWorkers` scope.
+- `wk kit install --worker-bindings '<json>'` fills a kit's worker slots at install, each alias to the UUID of an installed worker.
+- `wk workers quality get`, `set` and `preview` expose worker criteria, capability reasons and the three gates. Updates require `--expected-revision`; automatic/shared learning fields accept `false` only. Activation and paid improvement controls require owner review in the dashboard.
+- Kit install previews explain copied public criteria and gates starting off. Run output separates quality checks and report coverage from execution status; `--json` retains the API response unchanged.
+- Run output shows who started a run (a user, a fleet key by name and prefix, a schedule, a webhook or a calling worker), the run it continues and the workers it called, each charged separately.
+- `wk runs get --no-include-content` reads a receipt's metadata and content references without copying its reports.
+- Offline `wk instructions`, `wk tools list` and `wk tools describe` expose shared guidance and map every tool name to its CLI command.
 - Full command help includes tool and parameter guidance, links related commands and identifies inputs available only through Manager tools.
 - Worker list tables show the owner returned by the API. Member credentials remain limited to their own workers.
 - `wk workers timezone <tokenId> --time-zone-id America/New_York` sets report and local-date timezone without changing explicit schedule overrides. `wk kit install --time-zone-id`, `wk workers create-action --time-zone-id` and `timeZoneId` in a decision creation request save the creator's selected zone. Omission uses UTC.
@@ -38,6 +46,8 @@ Requires `@workerkit/core` 0.3.16.
 
 ### Changed
 
+- `wk kit install` points to `wk workers bindings-set` for slots left unbound at install.
+- `wk runs tail` drains every retained event page and waits one quiet poll for late events before it prints the settled receipt. A canceled run is followed until it finishes settling.
 - `wk auth status` says which workers the key reaches (`Workers: all` or `Workers: N selected`), and `wk workers list` counts and empty states speak of the workers the key reaches, since a key may now be limited to selected workers.
 - `wk workers create-action` and `wk decision create` need the `createWorkers` scope instead of `publishKits` + `installKits`.
 - Command summaries come from the shared tool descriptions.
@@ -52,6 +62,7 @@ Requires `@workerkit/core` 0.3.16.
 
 ### Fixed
 
+- `wk kit install` prints trigger signing secrets even when the install returns no worker API key.
 - `wk kit install` reads a numeric `appsNeedingConnection` count in the preview.
 - Help summaries handle abbreviations and parentheses without cutting sentences short.
 

@@ -113,8 +113,10 @@ export function renderHybridReceipt(data: unknown): string | null {
   const receipt = object(data);
   if (!receipt || receipt.kind !== "hybrid") return null;
   const lines = [`Run: ${inline(receipt.runId)} (${inline(receipt.status)})`];
+  lines.push(...renderRunAttribution(receipt));
+  lines.push(...renderRunResult(receipt));
   if (receipt.contentWithheld === true) {
-    lines.push(yellow("Run content withheld: this key lacks the readRuns scope."));
+    lines.push(yellow("Run content withheld (metadata requested or unavailable with this key). Resolve content references with an authorized key."));
   } else {
     if (typeof receipt.finalDigest === "string") lines.push(sanitizeText(receipt.finalDigest));
     const decision = object(receipt.decision);
@@ -122,4 +124,80 @@ export function renderHybridReceipt(data: unknown): string | null {
   }
   lines.push(...renderHybridStages(receipt));
   return lines.join("\n");
+}
+
+function initiatorLabel(value: unknown): string {
+  const initiator = object(value);
+  const key = object(initiator?.managerKey);
+  if (initiator?.kind === "fleetKey" && key) {
+    return `Fleet key ${inline(key.name)} (#${inline(key.id)}, ${inline(key.prefix)})`;
+  }
+  if (initiator?.kind === "user") return initiator.userDisplayName ? inline(initiator.userDisplayName) : `User #${inline(initiator.userId)}`;
+  if (initiator?.kind === "worker") return "Worker";
+  if (initiator?.kind === "schedule") return "Schedule";
+  if (initiator?.kind === "webhook") return "Webhook";
+  return "Not recorded on this historical receipt";
+}
+
+/** Safe receipt metadata is available independently of report-content permission. */
+export function renderRunAttribution(data: unknown): string[] {
+  const receipt = object(data);
+  if (!receipt) return [];
+  const lines = [`Started by: ${initiatorLabel(receipt.initiator)}`];
+  const initiator = object(receipt.initiator);
+  if (initiator?.kind === "fleetKey" && initiator.userId != null) lines.push(`Accountable user: ${initiator.userDisplayName ? inline(initiator.userDisplayName) : `#${inline(initiator.userId)}`}`);
+  if (receipt.relationship === "questionContinuation") lines.push(`Continues run: ${inline(receipt.parentRunId)}`);
+  const caller = object(initiator?.worker);
+  if (caller) lines.push(`Calling run: ${inline(caller.runId)}`);
+  for (const value of Array.isArray(receipt.workerCalls) ? receipt.workerCalls : []) {
+    const call = object(value);
+    if (call) {
+      const reference = call.actionInvocationId ? `Action receipt ${inline(call.actionInvocationId)}` : `run ${inline(call.runId ?? "not created")}`;
+      lines.push(`Called worker ${inline(call.alias)}: ${inline(call.status)}; ${reference} (charged separately)`);
+    }
+  }
+  const origin = object(receipt.origin);
+  if (origin && origin.runId !== receipt.runId) {
+    lines.push(`Original run: ${origin.runId == null ? "Not recorded" : inline(origin.runId)}; ${initiatorLabel(origin.initiator)}`);
+  }
+  return lines;
+}
+
+/** Shape validation and the worker's business assessment are separate from execution status. */
+export function renderRunResult(data: unknown): string[] {
+  const receipt = object(data);
+  const result = object(object(receipt?.digestStructured)?.result);
+  const lines: string[] = [];
+  if (receipt?.status === "Canceled" && !receipt.finishedAtUtc) {
+    lines.push("Cancellation requested; execution and charges are still settling. Earlier app effects may remain.");
+  }
+  const quality = object(receipt?.qualityEvaluation);
+  if (quality && receipt?.contentWithheld !== true) {
+    lines.push(`Quality checks: ${inline(quality.status)}; criteria revision ${inline(quality.configurationRevision)}. Unknown is unverified, not a pass.`);
+    const execution = (Array.isArray(quality.executionChecks) ? quality.executionChecks : []).map(object).filter(check => check !== null);
+    if (execution.length) {
+      const attention = execution.filter(check => check.status === "needs_attention");
+      const unknown = execution.filter(check => check.status === "unknown");
+      lines.push(`Execution checks (code): ${attention.length} need attention; ${unknown.length} unverified. Recovered attempts do not automatically fail business acceptance.`);
+      const findings = [...attention, ...unknown];
+      for (const check of findings.slice(0, 3)) {
+        lines.push(`${inline(check.title ?? check.checkId)}: ${inline(check.status)}. ${inline(check.reason)}`);
+        if (check.recommendation) lines.push(`Next step: ${inline(check.recommendation)}`);
+      }
+      if (findings.length > 3) lines.push("More execution findings are available in the run receipt or JSON output.");
+    }
+    const review = object(quality.systemReview);
+    if (review) {
+      const attention = (Array.isArray(review.checks) ? review.checks : []).map(object).filter(check => check?.status === "needs_attention");
+      lines.push(`System learning: ${inline(review.state)}; ${attention.length} ${attention.length === 1 ? "check needs" : "checks need"} attention. Recommendations do not apply changes.`);
+      for (const check of attention.slice(0, 3))
+        lines.push(`Next step (${inline(check?.title ?? check?.checkId)}): ${inline(check?.recommendation ?? "Open the run diagnostic to investigate.")}`);
+      if (attention.length > 3) lines.push("More recommendations are available in the run receipt or JSON output.");
+    }
+  }
+  if (!result || receipt?.contentWithheld === true) return lines;
+  if (result.validationError) return [...lines, `Structured result unavailable: ${inline(result.validationError)}. Execution status is unchanged.`];
+  lines.push(`Worker assessment: ${inline(result.completeness)} coverage; ${inline(result.acceptance)} (self-reported).`);
+  for (const item of Array.isArray(result.unresolved) ? result.unresolved : []) lines.push(`Unresolved: ${inline(item)}`);
+  return lines;
 }

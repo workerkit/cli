@@ -78,6 +78,7 @@ export function mountKit(program: Command): void {
     .option("--slack-connection-id <id>", "Action kits: Slack bot connection from the preview actionConnections")
     .option("--avatar <slug>", "Avatar for the new worker")
     .option("--category-choices <json>", "One entry per preview categorySlots slot (JSON array)")
+    .option("--worker-bindings <json>", "Explicit worker slot alias to worker UUID map (JSON object). Unbound required slots block runs until `wk workers bindings-set` fills them.")
     .option("--github-selection <json>", "GitHub accounts and repository IDs (JSON object); use preview.githubAccounts for connection IDs. An empty accounts array defers GitHub setup.")
     .option("--inputs <json>", "Answers to the preview's requiredInputs (JSON object)")
     .option("--memory-answers <json>", "Answers to the preview's memorySetup questions (JSON object)")
@@ -110,6 +111,8 @@ export function mountKit(program: Command): void {
       decisionSetup?: DecisionSetupQuestion[];
       appsNeedingConnection?: number | Array<{ app?: string } | string>;
       githubSetup?: { explicitSelectionRequired?: boolean } | null;
+      workerSlots?: Array<{ alias: string; required: boolean }>;
+      evaluationSpec?: { criteria?: Array<{ requirement?: string }> } | null;
       limits?: { currentWorkers?: number; maxWorkers?: number };
     };
 
@@ -124,8 +127,15 @@ export function mountKit(program: Command): void {
         typeof a === "string" ? a : (a.app ?? "?"),
       );
       process.stdout.write(`${bold(`Installing kit ${slug}`)}\n`);
+      const criteria = previewBody.evaluationSpec?.criteria;
+      if (criteria?.length) {
+        process.stdout.write(`Quality: ${criteria.length} kit criteria will copy to the worker; all three quality/learning gates stay off. Review them after install with wk workers quality get.\n`);
+      }
       if (required.length > 0)
         process.stdout.write(`Required inputs: ${sanitizeInline(required.join(", "))} (pass via --inputs '{...}')\n`);
+      const requiredWorkers = (previewBody.workerSlots ?? []).filter(slot => slot.required).map(slot => slot.alias);
+      if (requiredWorkers.length)
+        process.stdout.write(`Required workers: ${sanitizeInline(requiredWorkers.join(", "))}. Pass --worker-bindings or fill them later with wk workers bindings-set; runs stay blocked until bound.\n`);
       if ((previewBody.modelType === "decision" || previewBody.modelType === "hybrid")) {
         const questions = (previewBody.decisionSetup ?? []).map((q) => q.key ?? "?");
         process.stdout.write("Decision kit: no model to pick.\n");
@@ -186,6 +196,16 @@ export function mountKit(program: Command): void {
     if (options.operatorId) installParams.operatorId = options.operatorId;
     if (options.title) installParams.title = options.title;
     if (options.avatar) installParams.avatar = options.avatar;
+    if (options.workerBindings !== undefined) {
+      const schema = installDescriptor.schema.workerBindings;
+      if (!schema) throw new Error("The installed core package does not support worker bindings");
+      const validated = schema.safeParse(safeJson(options.workerBindings));
+      if (!validated.success) {
+        process.stderr.write(`Invalid worker bindings: ${validated.error.issues.map(issue => issue.message).join("; ")}\n`);
+        process.exitCode = 2; return;
+      }
+      installParams.workerBindings = validated.data;
+    }
     if (options.githubSelection !== undefined) {
       const githubSelection = safeJson(options.githubSelection);
       if (!githubSelection || typeof githubSelection !== "object" || Array.isArray(githubSelection)) {
@@ -248,18 +268,16 @@ export function mountKit(program: Command): void {
     ];
     process.stdout.write(renderDetail(detail) + "\n");
 
-    if (body.install?.rawKey) {
-      // Secrets are shown verbatim on purpose (this is their one delivery); sanitizeInline only
-      // strips control/escape bytes, which no legitimate key material contains.
-      process.stdout.write(
-        `\n${red(bold("Shown ONCE — store these now:"))}\n` +
-          `${bold("Worker API key:")} ${sanitizeInline(body.install.rawKey)}\n`,
-      );
-      for (const trigger of body.install.triggers ?? []) {
-        if (trigger.signingSecret) {
-          process.stdout.write(`${bold("Trigger signing secret:")} ${sanitizeInline(trigger.signingSecret)}\n`);
-        }
-      }
+    // Secrets are shown verbatim on purpose (this is their one delivery); sanitizeInline only
+    // strips control/escape bytes, which no legitimate key material contains. Trigger secrets
+    // print on their own: an install may return them without a worker API key.
+    const secrets: string[] = [];
+    if (body.install?.rawKey) secrets.push(`${bold("Worker API key:")} ${sanitizeInline(body.install.rawKey)}`);
+    for (const trigger of body.install?.triggers ?? []) {
+      if (trigger.signingSecret) secrets.push(`${bold("Trigger signing secret:")} ${sanitizeInline(trigger.signingSecret)}`);
+    }
+    if (secrets.length > 0) {
+      process.stdout.write(`\n${red(bold("Shown ONCE — store these now:"))}\n${secrets.join("\n")}\n`);
     }
     if (body.readiness?.status === "blocked" && body.connectAppsUrl) {
       process.stdout.write(

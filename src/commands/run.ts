@@ -1,4 +1,4 @@
-import { renderDecision, renderHybridReceipt, type DecisionBlock } from "../output/runReceipt.js";
+import { renderDecision, renderHybridReceipt, renderRunAttribution, renderRunResult, type DecisionBlock } from "../output/runReceipt.js";
 import type { Command } from "commander";
 import { byName, executeTool, isSuccess } from "@workerkit/core";
 import { runTool, globalOpts } from "../bind.js";
@@ -122,10 +122,12 @@ export function mountRun(program: Command): void {
           if (!receipt || typeof receipt !== "object") return null;
           const status = sanitizeInline(String(receipt.status ?? ""));
           if (status.toLowerCase() === "skipped") {
-            return `${yellow("Run skipped:")} ${sanitizeInline(String(receipt.skipReason ?? "policy"))}`;
+            return [`${yellow("Run skipped:")} ${sanitizeInline(String(receipt.skipReason ?? "policy"))}`, ...renderRunAttribution(receipt)].join("\n");
           }
           const verb = options.waitSeconds === undefined ? "Run started:" : "Run:";
           const lines = [`${bold(verb)} ${sanitizeInline(String(receipt.runId ?? "?"))} (${status || "pending"})`];
+          lines.push(...renderRunAttribution(receipt));
+          lines.push(...renderRunResult(receipt));
           // A waited run answers the SETTLED receipt, decisions and all — the point of
           // --wait-seconds is what it decided, not the id it was given.
           if (receipt.decision && typeof receipt.decision === "object") {

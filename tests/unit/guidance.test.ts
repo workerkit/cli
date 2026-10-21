@@ -19,7 +19,11 @@ describe("complete offline guidance", () => {
         let text = ""; command.configureOutput({writeOut: chunk=>{text += chunk;}}); command.outputHelp();
         outputs.push(text);
       }
-      help.set(tool, outputs.join("\n"));
+      // This reference is rendered as a CLI command in help; coverage uses
+      // the canonical tool name. Keep testing the emitted help itself.
+      help.set(tool, outputs.join("\n")
+        .replaceAll("wk workers quality get", "worker_quality_get")
+        .replaceAll("wk workers permissions-set", "worker_permissions_set"));
     }
     for (const profile of ["workers", "decision", "directory"] as const) {
       const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
@@ -150,6 +154,7 @@ describe("complete offline guidance", () => {
     expect(help).toContain("CLI input limits:");
     expect(help).toContain("Install and deploy in one call is not offered");
     expect(help).toContain("wk deploy");
+    expect(help).toContain("--worker-bindings");
   });
 
   it.each([

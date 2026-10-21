@@ -123,6 +123,7 @@ interface FlagInfo {
 
 interface ZodDefLike {
   typeName?: string;
+  value?: unknown;
   innerType?: ZodTypeLike;
   defaultValue?: () => unknown;
   values?: string[];
@@ -185,6 +186,8 @@ function flagInfos(descriptor: ToolDescriptor, spec: ToolCommandSpec): FlagInfo[
     let enumValues: string[] | undefined;
     if (typeName === "ZodNumber") kind = "number";
     else if (typeName === "ZodBoolean") kind = "boolean";
+    // A revoke-only field must accept JSON false, never offer an enabling flag.
+    else if (typeName === "ZodLiteral" && base._def.value === false) { kind = "json"; enumValues = ["false"]; }
     else if (typeName === "ZodEnum") enumValues = (base._def.values as string[] | undefined) ?? [];
     else if (typeName === "ZodArray" || typeName === "ZodRecord" || typeName === "ZodObject") kind = "json";
 

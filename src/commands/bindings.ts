@@ -20,6 +20,10 @@ const kitBodyFields = (...keys: string[]): Record<string, string> =>
   Object.fromEntries(keys.map((k) => [k, KIT_BODY]));
 
 export const bespokeCommandBindings: Record<string, BespokeCommand> = {
+  api_app_create: { path: "api-apps create", offFlag: { name: "Read from request JSON on --file or stdin.", definition: "Read from request JSON on --file or stdin.", enabled: "Read from request JSON on --file or stdin." } },
+  api_app_update: { path: "api-apps update", offFlag: { name: "Read from request JSON on --file or stdin.", definition: "Read from request JSON on --file or stdin.", enabled: "Read from request JSON on --file or stdin.", revision: "Read from request JSON on --file or stdin." } },
+  api_app_validate: { path: "api-apps validate", offFlag: { definition: "Read from request JSON on --file or stdin." } },
+  api_app_preview: { path: "api-apps preview", offFlag: { definition: "Read from request JSON on --file or stdin.", operation: "Read from request JSON on --file or stdin.", arguments: "Read from request JSON on --file or stdin." } },
   worker_tool_call: { path: "workers invoke", offFlag: { contractVersion: "This release supports version 1, validated by core." } },
   decision_worker_create: { path: "decision create", offFlag: kitBodyFields("requestId", "name", "timeZoneId", "source", "questions", "confidenceFloor", "maxItems", "operatorId", "deploy", "decisionProfileId", "maxUsdPerRun", "maxUsdPerDay") },
   worker_run: {

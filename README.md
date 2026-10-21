@@ -73,7 +73,10 @@ wk workers list [--status ...] [--deployed] [--readiness ...] [--q ...]   # your
 wk workers get <tokenId>              # tokenId = the ID column in `wk workers list`; shows Type and any pending setup
 wk workers enable|disable <tokenId>
 wk workers delete <tokenId>           # permanent, takes sub-workers with it (`disable` is the reversible stop)
-wk workers permissions <tokenId>      # what it may touch, in the kit vocabulary (read-only)
+wk workers permissions <tokenId>      # what it may touch, in the kit vocabulary
+wk workers permissions-set <tokenId> --apps '<json>' [--timeframe-past-days=-1 ...]   # replace the app set (Admin, manageAppsAndWorkers); apps left out are switched off
+wk workers bindings <tokenId>         # grants to call other workers, the kit's slots and what is still empty
+wk workers bindings-set <tokenId> --worker-bindings '{"brain":{"workerId":"<uuid>"},"old":null}'   # fill, re-point or clear aliases (manageAppsAndWorkers)
 wk workers clone-preview|clone|clone-bulk <tokenId> [--title ...]   # keys shown once
 wk workers budget|budget-set <tokenId> ...
 wk workers timezone <tokenId> --time-zone-id America/New_York   # reports and schedules that follow the worker
@@ -81,6 +84,7 @@ wk workers timezone <tokenId> --time-zone-id UTC               # reset the worke
 wk workers action-options [--app ...]   # Action worker apps, tools and defaults
 wk workers create-action --app ... --name ... --request-id ...   # Action worker: no model, never deployed
 wk workers tools|invoke|invocation <tokenId> ...   # list an Action worker's tools, call one, read a write's receipt
+wk workers quality get|set|preview <tokenId> ...   # acceptance criteria and quality gates (see Worker quality)
 
 wk deploy <tokenId> [--model-slug ...]   # enable hosted runs and schedules; does not start a run
 wk deployment list
@@ -145,6 +149,7 @@ wk mcp-servers get <handle>
 wk mcp-servers create <name> <url> --auth-type Bearer   # register + credential (file, stdin or prompt) + discover
 wk mcp-servers discover|delete <handle>
 wk mcp-servers set-tools <handle> <toolId...>   # enabling ≥1 tool publishes the server
+wk api-apps list|get|validate|preview|create|update|publish|version|revoke ...   # account-private API apps (see API apps)
 
 wk onboarding [--provider <slug>]
 wk wallet balance
@@ -162,8 +167,9 @@ wk update                             # update the CLI itself
 
 General worker authoring is a two-step: `wk kit publish --file kit.json --private`, then
 `wk kit install <slug>`. A private kit is installable only by your account and goes through the
-same validators as a directory listing — that is the platform's rule for permissions authored by
-an agent. A kit can be a language kit (an instruction), a decision kit (a routing table), a hybrid
+same validators as a directory listing — that is the platform's rule for a worker an agent builds
+from scratch; an existing worker's apps change with `wk workers permissions-set` (account Admin,
+`manageAppsAndWorkers`). A kit can be a language kit (an instruction), a decision kit (a routing table), a hybrid
 kit (classification followed by one language-model agent), or an Action kit (selected app tools
 with no model; see [Action workers](#action-workers)). Use `wk kit search --model-type decision`
 or `--model-type hybrid` to narrow discovery; `wk kit guide --section index` says which a job is.
@@ -287,6 +293,41 @@ without calling the app again. `outcome_unknown` means the app may have acted: r
 check the app, and never retry under a new key. A refusal marked `retryable` can be tried again
 later under a new key. Write receipts keep the confirmation, not the app's private response, so
 never resend to recover a lost response.
+
+## Worker quality
+
+```sh
+wk workers quality get <tokenId> --json
+wk workers quality set <tokenId> --expected-revision <revision> --no-quality-and-suggestions-enabled
+wk workers quality preview <tokenId> --spec '<json>' --evidence '<json>'
+```
+
+Read settings before updating; a stale revision needs a fresh review. Preview checks supplied samples without saving or running a worker; it cannot qualify an improvement. `--automatic-improvement-enabled false` and `--shared-learning-enabled false` revoke those gates. Their activation, private examples, paid comparisons, diagnosis, monitoring and apply/rollback are in the owner dashboard's Quality and improvement panel.
+
+Kit install copies public evaluation criteria with all three gates off. Current improvement changes instructions only; shadow learning does not train model weights. Run output shows quality separately from execution status; use `--json` for the full authorized receipt.
+
+## API apps
+
+`wk api-apps` authors API apps that belong to your account. Authoring needs a live
+account Admin and the `managePrivateApiApps` scope, which existing keys gain only
+through explicit re-scoping; `list` and `get` need `readWorkers`. The app remains
+private to your account when a version is published.
+
+```sh
+wk api-apps list
+wk api-apps validate --file validation-request.json
+wk api-apps create --file create-request.json
+wk api-apps get <appId>
+wk api-apps publish <appId> --revision <savedRevision>
+```
+
+Validation takes `{ "definition": ... }`; creation takes
+`{ "name": "Tickets", "definition": ..., "enabled": false }`. Create, update,
+validate and preview also accept a request piped on stdin. Definitions declare a
+public HTTPS origin and named operations with closed inputs and projected outputs;
+authentication contains secret-slot names only. Configure credentials and worker
+bindings on the dashboard. Publishing a version does not enable the app or upgrade
+existing workers. A revision conflict requires reviewing the latest saved app.
 
 ## Exit codes
 
