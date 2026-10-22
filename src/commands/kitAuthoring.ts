@@ -10,6 +10,18 @@ import { confirm } from "../output/confirm.js";
 import { bold, dim, green, red, yellow } from "../output/colors.js";
 import { sanitizeInline, sanitizeText } from "../output/sanitize.js";
 
+// Temporary client-side guard; the backend enforces the same pause for all clients.
+const PUBLIC_KIT_PUBLISHING_ENABLED: boolean = false;
+const PUBLIC_KIT_PUBLISHING_PAUSED =
+  "Public kit publishing is temporarily disabled. Use --private (visibility: private) to keep the kit private.";
+
+function publishingAllowed(visibility: string): boolean {
+  if (PUBLIC_KIT_PUBLISHING_ENABLED || visibility === "private") return true;
+  process.stderr.write(PUBLIC_KIT_PUBLISHING_PAUSED + "\n");
+  process.exitCode = 2;
+  return false;
+}
+
 // The kit-authoring lane of `wk kit` / `wk publisher`: the two anonymous reads an author starts
 // from, the owner's listing lifecycle, and the three body-carrying commands (validate, publish,
 // replace) that read the kit JSON from a file or stdin — a kit is far too large for flags.
@@ -278,7 +290,7 @@ export function mountKitAuthoring(kit: Command): void {
     .description("Publish a NEW kit from --file or stdin (validates first, then confirms). Publish private first. Language or decision kit: `wk kit guide --section index`.")
     .option("--file <path>", "The kit JSON: listing fields + content, or sourceWorkerId")
     .option("--private", "Publish as private (installable only by this account, no supply-chain scan)")
-    .option("--public", "Publish to the directory (runs the fail-closed supply-chain scan)")
+    .option("--public", "Temporarily unavailable: public publishing is paused")
     .option("--skip-validate", "Send it without the dry run");
   publish.action(async (options: Record<string, unknown>) => {
     const globals = globalOpts(publish);
@@ -289,6 +301,7 @@ export function mountKitAuthoring(kit: Command): void {
     if (options.private) body.visibility = "private";
     if (options.public) body.visibility = "public";
     const visibility = typeof body.visibility === "string" ? body.visibility : "public";
+    if (!publishingAllowed(visibility)) return;
 
     await validateThen(
       globals,
@@ -308,7 +321,7 @@ export function mountKitAuthoring(kit: Command): void {
     .argument("<kitRef>")
     .option("--file <path>", "The kit JSON: listing fields + content")
     .option("--private", "Result is private")
-    .option("--public", "Result is public (how a private kit is promoted; runs the scan)")
+    .option("--public", "Temporarily unavailable: public publishing and promotion are paused")
     .option("--skip-validate", "Send it without the dry run");
   replace.action(async (kitRef: string, options: Record<string, unknown>) => {
     const globals = globalOpts(replace);
@@ -319,6 +332,7 @@ export function mountKitAuthoring(kit: Command): void {
     if (options.private) body.visibility = "private";
     if (options.public) body.visibility = "public";
     const visibility = typeof body.visibility === "string" ? body.visibility : "public";
+    if (!publishingAllowed(visibility)) return;
 
     await validateThen(
       globals,

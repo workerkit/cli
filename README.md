@@ -106,6 +106,9 @@ wk runs score <runId> <0-100>         # or --clear
 wk runs clear-digest <runId>
 wk fleet pulse|health|budget|budget-set   # current runs, fleet issues and account-wide ceilings
 wk account usage                      # plan, worker + hosted slots, wallet, request windows, spend
+wk account spend                      # this UTC day's and month's run spend, by worker, day and model
+wk activity feed [--kind run|call|change] [--outcome ...] [--worker-id ...] [--since ...]   # runs, app calls and configuration changes, newest first
+wk activity summary [--since ...] [--until ...]   # the same activity counted over a window
 
 wk memory get|add|update|delete <tokenId> ...
 wk schedules list|create|update|delete <tokenId> ...
@@ -128,7 +131,7 @@ wk decision create --file decision.json --json   # private kit + worker; optiona
 wk decision set <tokenId> --decision-spec '<JSON>' --updated-at '<revision>'   # --updated-at null attaches the first classifier
 wk kit validate --file kit.json       # every gate's verdict at once
 wk kit publish --file kit.json --private   # validate → confirm → publish
-wk kit replace <slug> --file kit.json [--public]
+wk kit replace <slug> --file kit.json --private
 wk kit mine                           # your kits, with moderation state
 wk kit scan|update|unpublish|relist|make-private|delete <slug>
 wk publisher get <slug>
@@ -164,6 +167,11 @@ wk auth login [--start|--resume|--cancel] [--no-browser] [--email <address>]
 wk auth status|logout|profiles|use
 wk update                             # update the CLI itself
 ```
+
+Public kit publishing, promotion and relisting are temporarily paused. Explicitly use
+`--private` (or `"visibility": "private"` in the JSON) for publish and replace. Public
+publisher attribution is hidden; public publisher profiles return 404. Owner profile management
+remains available.
 
 General worker authoring is a two-step: `wk kit publish --file kit.json --private`, then
 `wk kit install <slug>`. A private kit is installable only by your account and goes through the

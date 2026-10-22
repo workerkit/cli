@@ -10,7 +10,7 @@ import { mountSchedules } from "./commands/schedules.js";
 import { mountInstruction } from "./commands/instruction.js";
 import { mountKit, mountPublisher } from "./commands/kit.js";
 import { mountDeliveries } from "./commands/deliveries.js";
-import { mountAccount, mountFleet } from "./commands/fleet.js";
+import { mountAccount, mountActivity, mountFleet } from "./commands/fleet.js";
 import { mountDeploy } from "./commands/deployment.js";
 import { mountApps, mountModelKeys } from "./commands/apps.js";
 import { mountApiApps } from "./commands/apiApps.js";
@@ -56,6 +56,7 @@ export function buildProgram(): Command {
   mountDeliveries(program);
   mountFleet(program);
   mountAccount(program);
+  mountActivity(program);
   mountKit(program);
   mountPublisher(program);
   mountApps(program);

@@ -6,6 +6,19 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-10-21
+
+Requires `@workerkit/core` 0.3.20.
+
+### Added
+
+- `wk activity feed` lists the runs, app calls and configuration changes of the workers a key reaches, newest first, narrowed with `--kind`, `--outcome`, `--worker-id`, `--since` and `--until` and paged with `--cursor`; `wk activity summary` counts the same activity over a window. Both need the `readRuns` scope.
+- `wk account spend` shows this UTC day's and month's run spend with its split by worker, day and model. Needs the `manageBudgets` scope.
+
+### Changed
+
+- Public kit publishing is temporarily paused. `wk kit publish` and `wk kit replace` refuse public or omitted visibility before sending anything, including with `--skip-validate`; `--private` works as before.
+
 ## [0.3.4] - 2026-10-21
 
 Requires `@workerkit/core` 0.3.19.
