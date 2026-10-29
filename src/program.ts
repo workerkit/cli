@@ -3,6 +3,7 @@ import { cliVersion } from "./version.js";
 import { mountAbout } from "./commands/about.js";
 import { mountAuth } from "./commands/auth.js";
 import { mountWorkers } from "./commands/workers.js";
+import { mountKnowledge } from "./commands/knowledge.js";
 import { mountRun } from "./commands/run.js";
 import { mountRuns } from "./commands/runs.js";
 import { mountMemory } from "./commands/memory.js";
@@ -47,6 +48,7 @@ export function buildProgram(): Command {
   mountAbout(program);
   mountAuth(program);
   mountWorkers(program);
+  mountKnowledge(program);
   mountRun(program);
   mountDeploy(program);
   mountRuns(program);

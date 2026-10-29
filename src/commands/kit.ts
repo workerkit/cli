@@ -5,7 +5,7 @@ import { buildClient, requireToken } from "../context.js";
 import { renderApiError } from "../errors.js";
 import { renderTable, renderDetail } from "../output/table.js";
 import { confirm } from "../output/confirm.js";
-import { bold, cyan, red, yellow } from "../output/colors.js";
+import { bold, cyan, dim, red, yellow } from "../output/colors.js";
 import { sanitizeInline, sanitizeText } from "../output/sanitize.js";
 import { mountKitAuthoring, mountPublisherAuthoring } from "./kitAuthoring.js";
 
@@ -284,6 +284,8 @@ export function mountKit(program: Command): void {
         `\n${yellow("Worker starts blocked.")} Connect its apps: ${cyan(sanitizeInline(body.connectAppsUrl))}\n`,
       );
     }
+    const footer = installDescriptor.footer?.(result.data, installParams);
+    if (footer) process.stdout.write(dim(`\n${sanitizeText(footer)}\n`));
   });
 
   // The authoring lane: guide + vocabulary (anonymous), then validate / publish / replace and

@@ -65,4 +65,15 @@ describe.skipIf(!existsSync(dist))("public kit publishing pause", () => {
     expect(calls.at(-1)?.body).toMatchObject({ visibility: "private" });
     expect(JSON.parse(result.stdout)).toMatchObject({ status: "private" });
   });
+
+  it("preserves attachment forwarding selections through kit validation and private publication", async () => {
+    const apps = [
+      { code: "email", operations: ["view_email", "forward_attachments"], visibleFields: ["attachments"] },
+      { code: "slack", operations: ["read_file", "forward_attachments"], visibleFields: ["files"] },
+    ];
+    const result = await wk(["publish", "--private"], { ...kit, content: { instructionContent: "Read permitted attachments.", apps } });
+    expect(result.code, result.stderr).toBe(0);
+    expect(calls.at(-2)?.body).toMatchObject({ content: { apps } });
+    expect(calls.at(-1)?.body).toMatchObject({ content: { apps } });
+  });
 });

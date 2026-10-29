@@ -6,6 +6,21 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-10-29
+
+Requires `@workerkit/core` 0.3.21.
+
+### Added
+
+- `wk knowledge sources`, `wk knowledge search`, `wk knowledge get <id>` and `wk knowledge changes` discover, search or browse, read and reconcile the retained worker reports a key may read; they need the `readKnowledge` scope. `wk knowledge get` takes `--evidence-version`, `--section` and `--offset` to continue a complete read with the same version.
+- `wk knowledge configuration get` and `wk knowledge configuration set` read and replace activation, enrolled sources and reader grants as an account administrator with the `manageKnowledge` scope and an unrestricted credential.
+
+### Changed
+
+- `wk kit install` prints the creation guidance the shared descriptor returns with a successful install: show the worker link, follow the setup actions and resolve readiness before the next call. The generated creation commands already did.
+- Run output omits the quality-checks line when a receipt's evaluation is diagnostics-only.
+- Command listings in `wk --help` describe each operation without the shared key_info preflight sentence that opens the tool descriptions; the full command help keeps it.
+
 ## [0.3.5] - 2026-10-21
 
 Requires `@workerkit/core` 0.3.20.

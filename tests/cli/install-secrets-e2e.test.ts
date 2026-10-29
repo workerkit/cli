@@ -5,6 +5,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { creationResultGuidance } from "@workerkit/core";
 
 const dist = fileURLToPath(new URL("../../dist/index.js", import.meta.url));
 const configDir = mkdtempSync(join(tmpdir(), "wk-install-secrets-"));
@@ -41,6 +42,16 @@ function install(): Promise<{ code: number | null; stdout: string; stderr: strin
 }
 
 describe("one-time install secrets", () => {
+  it("keeps the worker/setup links and creation handoff in human install output", async () => {
+    installBody = { worker: { tokenId: 42 }, workerUrl: "https://workerkit.ai/workers/synthetic-test",
+      connectAppsUrl: "https://workerkit.ai/apps", readiness: { status: "blocked", issues: [{ code: "app_not_connected" }] },
+      setupActions: [{ code: "connect_apps", apps: ["email"], message: "Connect email", url: "https://workerkit.ai/apps", arguments: {} }] };
+    const result = await install();
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain("https://workerkit.ai/workers/synthetic-test");
+    expect(result.stdout).toContain("https://workerkit.ai/apps");
+    expect(result.stdout).toContain(creationResultGuidance);
+  });
   it("prints trigger signing secrets when the install returns no worker API key", async () => {
     installBody = { worker: { tokenId: 42 }, install: { rawKey: null, triggers: [{ signingSecret: "whsec_example_only" }] } };
     const result = await install();

@@ -173,7 +173,8 @@ export function renderRunResult(data: unknown): string[] {
   }
   const quality = object(receipt?.qualityEvaluation);
   if (quality && receipt?.contentWithheld !== true) {
-    lines.push(`Quality checks: ${inline(quality.status)}; criteria revision ${inline(quality.configurationRevision)}. Unknown is unverified, not a pass.`);
+    if (quality.diagnosticsOnly !== true)
+      lines.push(`Quality checks: ${inline(quality.status)}; criteria revision ${inline(quality.configurationRevision)}. Unknown is unverified, not a pass.`);
     const execution = (Array.isArray(quality.executionChecks) ? quality.executionChecks : []).map(object).filter(check => check !== null);
     if (execution.length) {
       const attention = execution.filter(check => check.status === "needs_attention");

@@ -7,6 +7,15 @@ import { readCredential } from "../../src/input.js";
 
 afterEach(() => { vi.restoreAllMocks(); process.exitCode = 0; });
 
+it("shows free execution diagnostics without inventing a quality grade", () => {
+  const text = renderRunResult({ qualityEvaluation: { diagnosticsOnly: true, configurationRevision: 0,
+    status: "unknown", criteria: [], executionChecks: [{ checkId: "high_run_cost", status: "needs_attention",
+      reason: "Model usage cost $0.50.", recommendation: "Review the result and read volume." }] } }).join("\n");
+  expect(text).toContain("Model usage cost $0.50");
+  expect(text).not.toContain("Quality checks:");
+  expect(text).not.toContain("criteria revision 0");
+});
+
 it("shows bounded code findings without a model review and protects unreadable receipts", () => {
   const receipt = { qualityEvaluation: { status: "pass", configurationRevision: 3, executionChecks: [
     { checkId: "completion", status: "ok", reason: "Succeeded" },

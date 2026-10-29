@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
-import { executeTool, isSuccess, z, type ApiResult, type ToolDescriptor, byName, toolDocumentation } from "@workerkit/core";
+import { executeTool, isSuccess, z, type ApiResult, type ToolDescriptor, byName, managerAuthorityPreflight, toolDocumentation } from "@workerkit/core";
 import { buildClient, requireToken, type GlobalOpts } from "./context.js";
 import { renderApiError } from "./errors.js";
 import { sanitizeInline, sanitizeText } from "./output/sanitize.js";
@@ -252,7 +252,10 @@ export function mountTool(parent: Command, commandName: string, spec: ToolComman
   mountedSpecs.push(spec);
 
   const cmd = parent.command(commandName);
-  cmd.description(firstSentence(descriptor.description));
+  // Keep command indexes about the operation; complete help below retains preflight.
+  const purpose = descriptor.description.startsWith(managerAuthorityPreflight)
+    ? descriptor.description.slice(managerAuthorityPreflight.length) : descriptor.description;
+  cmd.description(firstSentence(purpose));
   addToolHelp(cmd, [spec.tool]);
 
   for (const key of spec.positionals ?? []) {

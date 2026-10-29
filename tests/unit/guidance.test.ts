@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { allDescriptors, byName, instructionsByProfile, toolDocumentation, guidanceCoverageFailures } from "@workerkit/core";
+import { allDescriptors, byName, instructionsByProfile, managerAuthorityPreflight, toolDocumentation, guidanceCoverageFailures } from "@workerkit/core";
 import { buildProgram } from "../../src/program.js";
 import { toolCommandPaths, formatToolReferences, firstSentence } from "../../src/bind.js";
 
@@ -146,7 +146,12 @@ describe("complete offline guidance", () => {
     visit(root);
     expect(count).toBeGreaterThan(100);
     const workers = root.commands.find(c => c.name() === "workers")!;
-    expect(workers.commands.find(c => c.name() === "list")!.description()).toContain("List reachable workers");
+    const list = workers.commands.find(c => c.name() === "list")!;
+    expect(list.description()).toContain("List reachable workers");
+    let listHelp = "";
+    list.configureOutput({ writeOut: text => { listHelp += text; } });
+    list.outputHelp();
+    expect(listHelp).toContain(formatToolReferences(managerAuthorityPreflight, root));
     const install = root.commands.find(c => c.name() === "kit")!.commands.find(c => c.name() === "install")!;
     let help = "";
     install.configureOutput({ writeOut: text => { help += text; } });

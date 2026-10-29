@@ -63,3 +63,15 @@ it("replaces the app set with only the scalars given", async () => {
   expect(calls.at(-1)).toEqual({ method: "PUT", url: "/api/manage/workers/42/permissions", body: { apps, timeframePastDays: -1 } });
   expect(JSON.parse(set.stdout).tokenId).toBe(42);
 });
+
+it("passes explicit attachment forwarding grants and revocation without a client operation allowlist", async () => {
+  const apps = [
+    { code: "email", operations: ["view_email", "forward_attachments"], visibleFields: ["attachments"] },
+    { code: "slack", operations: ["read_messages", "read_file", "forward_attachments"], visibleFields: ["files"] },
+  ];
+  for (const selected of [apps, apps.map(app => ({ ...app, operations: app.operations.filter(op => op !== "forward_attachments") }))]) {
+    const result = await wk(["permissions-set", "42", "--apps", JSON.stringify(selected)]);
+    expect(result.code, result.stderr).toBe(0);
+    expect(calls.at(-1)).toEqual({ method: "PUT", url: "/api/manage/workers/42/permissions", body: { apps: selected } });
+  }
+});
