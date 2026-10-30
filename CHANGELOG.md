@@ -6,6 +6,15 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-10-29
+
+Requires `@workerkit/core` 0.3.22.
+
+### Changed
+
+- `wk workers action-options` without `--app` lists the app inventory only, and `wk workers create-action` needs an explicit `--app` or `--action-spec`: the shared descriptors no longer imply Slack. The README examples follow, and the Action worker notes carry the per-source key rules that `wk workers tools` now reports in `idempotencyRequired` and `keyFormat`.
+- `wk instructions` prints the shorter workers, decision and directory instructions from `@workerkit/core` 0.3.22, and the generated command help carries its trimmed Action and authoring descriptions.
+
 ## [0.3.6] - 2026-10-29
 
 Requires `@workerkit/core` 0.3.21.

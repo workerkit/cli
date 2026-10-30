@@ -270,15 +270,16 @@ install.
 
 ## Action workers
 
-An Action worker exposes selected app tools without a language or decision model. Discover apps
-and their default tools, then create a worker. Native and reviewed MCP apps use the same flow;
-omitting `--app` selects Slack:
+An Action worker exposes selected app tools without a language or decision model. Discover the
+app inventory, read one app's reviewed tools and defaults, then create a worker with an explicit
+`--app` or `--action-spec`; there is no implicit app. Native and reviewed MCP apps use the same
+flow:
 
 ```sh
 wk workers action-options --json
 wk workers action-options --app weather --json
 wk workers create-action --app weather --name "Weather tools" --request-id weather-tools-1 --json
-wk workers create-action --name "Slack actions" --slack-connection-id 123 --request-id slack-actions-1 --json
+wk workers create-action --app slack --name "Slack actions" --slack-connection-id 123 --request-id slack-actions-1 --json
 wk workers tools 42 --json
 ```
 
@@ -298,12 +299,14 @@ wk workers invocation 42 <invocationId> --json
 
 Calls and receipts need `invokeActions`. A call answers with `status` `succeeded`, `denied`,
 `failed`, `in_progress` or `outcome_unknown`; `invoke` prints the full receipt and exits nonzero
-unless the call succeeded. Reads take JSON arguments the same way and need no key. After a
+unless the call succeeded. Native and MCP reads take JSON arguments the same way and need no key;
+`wk workers tools` reports each tool's `idempotencyRequired` and `keyFormat`, and every private
+API operation, including reads, needs a `v1:<Unix timestamp>:<32-hex UUID>` key. After a
 transport failure, repeat the same key with the same arguments: it returns the stored result
 without calling the app again. `outcome_unknown` means the app may have acted: read the receipt,
 check the app, and never retry under a new key. A refusal marked `retryable` can be tried again
-later under a new key. Write receipts keep the confirmation, not the app's private response, so
-never resend to recover a lost response.
+later under a new key. Native and MCP write receipts keep the confirmation, not the app's private
+response, so never resend to recover a lost response.
 
 ## Worker quality
 
