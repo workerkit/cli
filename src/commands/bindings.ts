@@ -28,7 +28,7 @@ export const bespokeCommandBindings: Record<string, BespokeCommand> = {
   decision_worker_create: { path: "decision create", offFlag: kitBodyFields("requestId", "name", "timeZoneId", "source", "questions", "confidenceFloor", "maxItems", "operatorId", "deploy", "decisionProfileId", "maxUsdPerRun", "maxUsdPerDay") },
   worker_run: {
     path: "run",
-    aliases: { modelSlug: "model", decisionProfileId: "decisionProfile" },
+    aliases: { modelSlug: "model", decisionProfileId: "decisionProfile", inputs: "inputId" },
   },
 
   run_score: { path: "runs score" },

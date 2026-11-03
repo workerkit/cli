@@ -1,12 +1,14 @@
 import { renderDecision, renderHybridReceipt, renderRunAttribution, renderRunResult, type DecisionBlock } from "../output/runReceipt.js";
 import type { Command } from "commander";
-import { byName, executeTool, isSuccess } from "@workerkit/core";
+import { byName, executeTool, isSuccess, z } from "@workerkit/core";
 import { runTool, globalOpts } from "../bind.js";
 import { buildClient, requireToken, type GlobalOpts } from "../context.js";
 import { tailRun } from "./runs.js";
 import { bold, yellow } from "../output/colors.js";
 import { confirm } from "../output/confirm.js";
 import { sanitizeInline } from "../output/sanitize.js";
+import { randomUUID } from "node:crypto";
+import { FileSelectionError, uploadRunFiles } from "../inputFiles.js";
 
 /**
  * `wk run <tokenId>` — the marquee verb. POST worker_run, print the receipt, and with --follow
@@ -48,6 +50,9 @@ export function mountRun(program: Command): void {
     .command("run")
     .description("Trigger a worker to run now")
     .argument("<tokenId>")
+    .option("--file <path>", "Attach a local PDF, PNG or JPEG file (repeat for up to 3 files, 7 MiB each and 15 MiB in total)", (value: string, previous: string[]) => [...previous, value], [])
+    .option("--input-id <fileId>", "Use an already finalized upload instead of --file (repeat); with --idempotency-key this recovers a lost submission", (value: string, previous: string[]) => [...previous, value], [])
+    .option("--idempotency-key <key>", "Submission key for a run with files (8-100 letters, digits, - or _); generated when omitted")
     .option("-p, --prompt <text>", "Language and hybrid workers: extra instruction for this run only (<=8000 chars)")
     .option("--decision-profile <id>", "Workers with classification: override the classifier for this run (see deployment models)")
     .option("--model <slug>", "Language and hybrid workers: override the model for this run")
@@ -60,6 +65,7 @@ export function mountRun(program: Command): void {
   cmd.action(async (tokenId: string, options: {
     prompt?: string; model?: string; decisionProfile?: string; follow?: boolean;
     sourceArgs?: string; answers?: string; maxItems?: string; waitSeconds?: string;
+    file: string[]; inputId: string[]; idempotencyKey?: string;
   }) => {
     const globals = globalOpts(cmd);
     const descriptor = byName("worker_run");
@@ -102,6 +108,35 @@ export function mountRun(program: Command): void {
       }
     }
 
+    if (options.file.length || options.inputId.length) {
+      if (options.file.length && options.inputId.length) {
+        process.stderr.write("Use --file or --input-id, not both.\n");
+        process.exitCode = 2;
+        return;
+      }
+      params.idempotencyKey = options.idempotencyKey ?? randomUUID();
+      // Check the run arguments and any --input-id references before reserving an upload.
+      const references = options.inputId.map((fileId) => ({ kind: "file", fileId }));
+      const checked = z.object(descriptor.schema).strict().safeParse({ ...params, inputs: references });
+      if (!checked.success) {
+        const issue = checked.error.issues[0];
+        process.stderr.write(sanitizeInline(`Invalid ${issue?.path.join(".") || "input"}: ${issue?.message ?? "invalid input"}`) + "\n");
+        process.exitCode = 2;
+        return;
+      }
+      try {
+        params.inputs = options.file.length
+          ? await uploadRunFiles(buildClient(), await requireToken(globals.profile), Number(tokenId), options.file)
+          : references;
+      } catch (error) {
+        process.stderr.write(sanitizeInline(error instanceof Error ? error.message : "File upload failed.") + "\n");
+        process.exitCode = error instanceof FileSelectionError ? 2 : 1;
+        return;
+      }
+      process.stderr.write(`File submission recovery: ${JSON.stringify({ idempotencyKey: params.idempotencyKey, inputs: params.inputs })}\n`
+        + "Keep these values and the original run arguments if the response is lost.\n");
+    }
+
     // Suppress default rendering only when following (we print the receipt ourselves either way
     // via emitResult; --follow needs the runId from the result).
     const result = await runTool(
@@ -109,7 +144,7 @@ export function mountRun(program: Command): void {
       {
         tool: "worker_run",
         positionals: ["tokenId"],
-        hidden: ["prompt", "modelSlug", "decisionProfileId", "sourceArgs", "answers", "maxItems", "waitSeconds"],
+        hidden: ["prompt", "modelSlug", "decisionProfileId", "sourceArgs", "answers", "maxItems", "waitSeconds", "inputs", "idempotencyKey"],
         render: (data) => {
           const hybrid = renderHybridReceipt(data);
           if (hybrid !== null) return hybrid;

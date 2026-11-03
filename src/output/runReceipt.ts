@@ -171,6 +171,15 @@ export function renderRunResult(data: unknown): string[] {
   if (receipt?.status === "Canceled" && !receipt.finishedAtUtc) {
     lines.push("Cancellation requested; execution and charges are still settling. Earlier app effects may remain.");
   }
+  if (receipt?.contentWithheld !== true && Array.isArray(receipt?.inputs)) {
+    for (const input of receipt.inputs.slice(0, 3).map(object).filter(item => item !== null)) {
+      lines.push(`File: ${inline(input.name)}; handoff ${inline(input.handoffStatus)}; storage ${inline(input.storageStatus)}; model read ${inline(input.readStatus)}.`);
+      if (input.notice) lines.push(input.notice === 'attachment_forwarding_disabled'
+        ? 'File attached, but forwarding attachments to the model is not permitted.' : `File notice: ${inline(input.notice)}.`);
+      for (const save of (Array.isArray(input.saves) ? input.saves : []).slice(0, 3).map(object).filter(item => item !== null))
+        lines.push(`Drive save: ${inline(save.status)}${save.fileId ? ` (${inline(save.fileId)})` : ''}.`);
+    }
+  }
   const quality = object(receipt?.qualityEvaluation);
   if (quality && receipt?.contentWithheld !== true) {
     if (quality.diagnosticsOnly !== true)

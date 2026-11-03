@@ -33,6 +33,19 @@ function paintStatus(status: string): string {
 
 export function mountWorkers(program: Command): void {
   const workers = program.command("workers").description("Manage your workers (list, inspect, start/stop)");
+  const files = workers.command("files").description("Uploaded file status and the worker's private file-intake storage");
+  mountTool(files, "get", { tool: "worker_file_get", positionals: ["tokenId", "fileId"] });
+  mountTool(files, "delete", {
+    tool: "worker_file_delete",
+    positionals: ["tokenId", "fileId"],
+    confirm: (p) => `Revoke upload ${p.fileId} on worker ${p.tokenId}? Its stored content is removed and it can no longer be used in a run.`,
+  });
+  mountTool(files, "storage", { tool: "worker_file_storage_get", positionals: ["tokenId"] });
+  mountTool(files, "set-storage", {
+    tool: "worker_file_storage_set",
+    positionals: ["tokenId"],
+    confirm: (p) => `Store worker ${p.tokenId}'s uploads on ${p.ownership} storage${p.bucket ? ` (bucket ${String(p.bucket)})` : ""}? New uploads use this selection; existing uploads keep theirs.`,
+  });
 
   const quality = workers.command("quality").description("Review quality criteria and gates; owner-only improvement controls are in the dashboard");
   mountTool(quality, "get", { tool: "worker_quality_get", positionals: ["tokenId"] });

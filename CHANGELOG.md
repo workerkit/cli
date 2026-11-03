@@ -6,6 +6,16 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-11-03
+
+Requires `@workerkit/core` 0.3.23.
+
+### Added
+
+- `wk run <tokenId> --file <path>` attaches up to three local PDF, PNG or JPEG files, 7 MiB each and 15 MiB in total, to a run of a hosted language worker. The CLI checks the whole selection first, reads each file as opaque bytes, uploads it through `uploadWorkerFile` from `@workerkit/core`, prints the submission key and the finalized file IDs to stderr, and then starts the run. `--idempotency-key <key>` chooses the submission key, and `--input-id <fileId>` reuses finalized uploads instead of `--file`, so a lost response is recovered by repeating the same key, IDs and run arguments. A bad selection exits 2 before anything is uploaded; a refused upload exits 1 and names the API's error code, and every finished upload is revoked when a later one fails.
+- `wk workers files get <tokenId> <fileId>`, `wk workers files delete <tokenId> <fileId>`, `wk workers files storage <tokenId>` and `wk workers files set-storage <tokenId> --ownership platform|customer` read an upload's status, revoke an upload, and read or choose the worker's private file-intake storage. `delete` and `set-storage` ask for confirmation unless `--yes` is given.
+- Run output lists each file's handoff, storage and model-read status, forwarding notices and Drive save outcomes; `--json` returns the receipt unchanged.
+
 ## [0.3.7] - 2026-10-29
 
 Requires `@workerkit/core` 0.3.22.

@@ -85,6 +85,7 @@ wk workers action-options [--app ...]   # Action worker apps, tools and defaults
 wk workers create-action --app ... --name ... --request-id ...   # Action worker: no model, never deployed
 wk workers tools|invoke|invocation <tokenId> ...   # list an Action worker's tools, call one, read a write's receipt
 wk workers quality get|set|preview <tokenId> ...   # acceptance criteria and quality gates (see Worker quality)
+wk workers files get|delete|storage|set-storage <tokenId> ...   # an upload's status, revoke it, read or choose private file-intake storage
 
 wk deploy <tokenId> [--model-slug ...]   # enable hosted runs and schedules; does not start a run
 wk deployment list
@@ -92,6 +93,7 @@ wk deployment get|update|remove <tokenId> ...
 wk deployment models                  # language models and decision profiles this account may use, priced
 
 wk run <tokenId> [--prompt ...] [--follow]
+wk run <tokenId> --file ./invoice.pdf [--file ...]   # up to three PDF, PNG or JPEG files (see Send files to a worker)
 wk run <tokenId> [--source-args '{...}'] [--answers '{...}'] [--max-items 20] [--wait-seconds 25]   # a decision worker's per-item decisions; --answers = per-run install answers, never saved
 wk runs bulk --workers '[...]'        # one prompt across up to 20 workers (not atomic; read items[])
 wk runs list <tokenId> [--status ...]
@@ -213,6 +215,25 @@ also take a `--no-` form to pass an explicit false (`--no-is-enabled`). Run any 
 Global flags: `--json` (raw API data, stable machine contract), `--plain` (compact agent-friendly
 text), `--yes` (skip confirmations), `--profile <name>`. They work before or after the
 subcommand: `wk --json workers list` and `wk workers list --json` are equivalent.
+
+## Send files to a worker
+
+```sh
+wk run 42 --prompt "Process this invoice and save the original in the approved Drive folder" --file ./invoice.pdf --follow
+wk workers files storage 42
+wk workers files get 42 <fileId>
+```
+
+Repeat `--file` for up to three PDF, PNG or JPEG files, 7 MiB each and 15 MiB in total. The CLI
+reads them as opaque bytes and never parses them. The worker needs the Files app's receive
+operation and private file-intake storage (`wk workers files set-storage`); letting its model read
+a file and saving the original to a destination app are separate grants.
+
+Before it starts the run, the CLI prints a submission key and the finalized file IDs to stderr. If
+the response is lost, repeat the command with `--input-id <fileId>` for each file and
+`--idempotency-key <key>`, keeping the original prompt and run arguments: that returns the original
+run without uploading again. Upload again for a new run. `--json` returns the complete receipt,
+including each file's handoff, storage and model-read status and any save outcomes.
 
 ## Decision and hybrid workers
 
