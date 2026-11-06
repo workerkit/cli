@@ -6,6 +6,21 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-11-06
+
+Requires `@workerkit/core` 0.3.25.
+
+### Changed
+
+- `wk apps connect <provider>` resolves the live app recipe and opens browser setup on an interactive
+  terminal. MCP apps accept either `mcp:<slug>` or a bare slug, with native provider codes taking precedence.
+- `--browser` explicitly opens setup, `--no-browser` prints the link, and `--json` returns it without
+  opening a browser. Explicit browser modes do not wait for piped input.
+- Protected credential files, stdin and explicit credential fields retain direct connection support.
+  Browser setup and explicit credential options cannot be combined.
+- Setup links preserve account and operator context. The follow-up status command retains an explicitly
+  selected operator, and the output makes clear that opening a link does not establish a connection.
+
 ## [0.3.9] - 2026-11-05
 
 Requires `@workerkit/core` 0.3.24.

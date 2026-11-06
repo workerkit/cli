@@ -64,6 +64,8 @@ try {
     assert.ok(timelineEnableHelp.includes("--no-enabled") && timelineEnableHelp.includes("--expected-version"));
     const privateHelp = execFileSync(process.execPath, [entry, "kit", "make-private", "--help"], { encoding: "utf8" });
     assert.ok(privateHelp.includes("--personal") && privateHelp.includes("--no-personal"));
+    const connectHelp = execFileSync(process.execPath, [entry, "apps", "connect", "--help"], { encoding: "utf8" });
+    assert.ok(connectHelp.includes("--browser") && connectHelp.includes("--no-browser") && connectHelp.includes("--credential-file"));
   }
   console.log(`${pack.name}@${pack.version}: package files and installed consumer passed (${names.length} files)`);
 } finally {

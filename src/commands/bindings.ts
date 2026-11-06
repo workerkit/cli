@@ -85,7 +85,7 @@ export const bespokeCommandBindings: Record<string, BespokeCommand> = {
   app_connect: {
     path: "apps connect",
     offFlag: {
-      credential: "A secret: --credential-file, stdin or a hidden prompt, so it never lands in shell history.",
+      credential: "A secret: --credential-file or stdin; without credentials the command opens browser setup.",
     },
   },
 

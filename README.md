@@ -143,7 +143,8 @@ wk publisher get <slug>
 wk publisher me|set ...
 
 wk apps list [--operator-id ...]      # which apps the operator can use, how to connect the rest
-wk apps connect <provider> [--field name=value ...]   # secret from a file, stdin or a hidden prompt
+wk apps connect <provider> [--no-browser]            # open app setup, or print its URL
+wk apps connect <provider> --credential-file <path> # direct credential input; stdin also supported
 wk apps disconnect <provider> <connectionId>
 wk apps github accounts [--q ...] [--operator-id ...]
 wk apps github repos --connection-id <id> [--q ...] [--page ...]
@@ -195,8 +196,14 @@ commands as any other, with its own flags.
 
 `wk kit tools`, `wk kit guide` and `wk kit vocabulary` are what to read first, and `wk apps list`
 says which apps the worker will actually be able to reach: a worker only uses apps that are
-connected on its operator. `wk apps connect` connects the credential-based ones (bot tokens, API
-keys, private-app tokens); Google, Microsoft, GitHub and Reddit sign in on the dashboard. An app
+connected on its operator. `wk apps connect mcp:krisp` opens that app's setup in WorkerKit (a bare
+`krisp` also resolves from the live catalog). Sign in if needed, then complete the app's connection.
+`--no-browser` prints the link; `--json` returns it without launching a browser. Browser setup
+uses `apps_list` and needs `readWorkers`; direct credential input still uses `manageConnections`.
+Links retain the account and `--operator-id` so setup reaches the intended worker identity.
+Afterward, run `wk apps list --operator-id <id>` to verify; opening a link is not proof of success.
+For scripts, supply a protected credential file, stdin or explicit fields to connect directly.
+Human-held secrets belong in the browser, not an AI conversation. An app
 the platform does not offer can still be reached through its MCP server: `wk mcp-servers create`
 registers it as your own custom MCP app (credential included), `wk mcp-servers set-tools` enables
 the tools a job needs — which publishes it — and the kit binds it in `content.mcpServers` by the

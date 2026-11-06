@@ -8,11 +8,11 @@ import { renderApiError } from "../errors.js";
 import { renderTable } from "../output/table.js";
 import { bold, dim, green, red, yellow } from "../output/colors.js";
 import { sanitizeInline } from "../output/sanitize.js";
+import { connectInBrowser } from "./appConnectBrowser.js";
 
-// `wk apps` — which apps an operator can use, and connecting the credential-based ones — and
-// `wk model-keys`, the account's own model-provider keys. Both writes carry a secret, so neither
-// takes it as a flag by default: a token in `--field botToken=…` lands in shell history, while a
-// file, a pipe, or the hidden prompt does not.
+// `wk apps` opens browser setup unless credential input is supplied. Direct app
+// writes and `wk model-keys` can read secrets from protected files or stdin;
+// model keys also retain their hidden prompt.
 
 interface AppStatusRow {
   app?: string;
@@ -90,12 +90,12 @@ function renderApps(data: unknown): string | null {
   }
   for (const warning of body.warnings ?? []) lines.push(yellow(`! ${sanitizeInline(warning)}`));
   if (typeof body.dashboardUrl === "string")
-    lines.push(dim(`OAuth apps (Google, Microsoft, GitHub, Reddit) connect on the dashboard: ${sanitizeInline(body.dashboardUrl)}`));
+    lines.push(dim(`Open an app's setup with wk apps connect <provider>, or use the dashboard: ${sanitizeInline(body.dashboardUrl)}`));
   return lines.join("\n");
 }
 
 export function mountApps(program: Command): void {
-  const apps = program.command("apps").description("Which apps your operator can use, and connecting the credential-based ones");
+  const apps = program.command("apps").description("Which apps your operator can use, and connecting them in the browser or by credential");
 
   mountTool(apps, "list", {
     tool: "apps_list",
@@ -113,34 +113,42 @@ export function mountApps(program: Command): void {
 
   const connect = apps
     .command("connect")
-    .description("Connect an app by credential (validated live, stored encrypted, never shown again)")
+    .description("Open app setup in the browser, or supply a credential to connect directly")
     .argument("<provider>", "A recipe's provider code from `wk apps list` (telegram, tavily, notion, mcp:<slug>, …)")
-    .option("--field <name=value>", "One credential field (repeatable)", (v: string, acc: string[]) => [...acc, v], [] as string[])
-    .option("--credential <json>", "The whole credential object as JSON")
+    .option("--field <name=value>", "One credential field (repeatable; prefer a file or stdin for secrets)", (v: string, acc: string[]) => [...acc, v], [] as string[])
+    .option("--credential <json>", "The whole credential object as JSON (prefer a file or stdin for secrets)")
     .option("--credential-file <path>", "A file holding the credential object as JSON (or pipe it on stdin)")
-    .option("--label <label>", "Optional label, where the family keeps one")
+    .option("--browser", "Open this app's setup dialog in WorkerKit (default without a credential)")
+    .option("--no-browser", "Print the setup URL without opening a browser (SSH, containers, CI)")
+    .option("--label <label>", "Optional label for direct credential input, where the family keeps one")
     .option("--operator-id <guid>", "The operator to connect for (default: the account's default operator)");
   connect.action(async (provider: string, options: Record<string, unknown>) => {
     const globals = globalOpts(connect);
     const descriptor = byName("app_connect");
     if (!descriptor) throw new Error("app_connect descriptor missing");
 
-    // With no input at all, prompt for the one field the common single-secret recipes take.
-    const SINGLE_FIELD: Record<string, string> = {
-      telegram: "botToken", discord: "botToken", slack: "botToken", sendgrid: "apiKey", resend: "apiKey",
-      tavily: "apiKey", brave: "apiKey", exa: "apiKey", brightData: "apiKey", firecrawl: "apiKey", nimble: "apiKey",
-      granola: "apiKey", krisp: "apiKey", hubspot: "token", notion: "apiToken", linear: "apiKey", monday: "apiToken", asana: "accessToken",
-    };
-    const promptFields = SINGLE_FIELD[provider] ? [SINGLE_FIELD[provider]] : [];
-    const credential = await readCredential(options, promptFields);
+    const hasCredentialOption = !!options.credential || !!options.credentialFile || (options.field as string[]).length > 0;
+    if (options.browser !== undefined && hasCredentialOption) {
+      process.stderr.write("Choose browser setup or credential input, not both.\n");
+      process.exitCode = 2;
+      return;
+    }
+    // Explicit browser mode never reads stdin (which may be a long-lived agent pipe).
+    const credential = options.browser !== undefined ? {} : await readCredential(options, []);
     if (!credential) return;
+
+    const client = buildClient();
+    const token = await requireToken(globals.profile);
+    if (options.browser !== undefined || (!hasCredentialOption && Object.keys(credential).length === 0)) {
+      await connectInBrowser(client, token, provider, typeof options.operatorId === "string" ? options.operatorId : undefined,
+        options.browser !== false && (options.browser === true || !!process.stdout.isTTY), globals.json);
+      return;
+    }
 
     const params: Record<string, unknown> = { provider, credential };
     if (typeof options.label === "string") params.label = options.label;
     if (typeof options.operatorId === "string") params.operatorId = options.operatorId;
 
-    const client = buildClient();
-    const token = await requireToken(globals.profile);
     const result = await executeTool(client, descriptor, params, { token });
     if (!isSuccess(result)) {
       process.exitCode = renderApiError(result, globals.json);
