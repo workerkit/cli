@@ -23,9 +23,10 @@ describe("complete offline guidance", () => {
       // the canonical tool name. Keep testing the emitted help itself.
       help.set(tool, outputs.join("\n")
         .replaceAll("wk workers quality get", "worker_quality_get")
-        .replaceAll("wk workers permissions-set", "worker_permissions_set"));
+        .replaceAll("wk workers permissions-set", "worker_permissions_set")
+        .replaceAll("wk knowledge changes", "knowledge_changes"));
     }
-    for (const profile of ["workers", "decision", "directory"] as const) {
+    for (const profile of ["workers", "decision", "directory", "knowledge"] as const) {
       const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
       let instructions = "";
       try {

@@ -66,6 +66,23 @@ describe.skipIf(!existsSync(dist))("public kit publishing pause", () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ status: "private" });
   });
 
+  it.each([["publish"], ["replace", "private-helper"]])("writes a personal kit the same way, as a private kit narrowed to its creator and Admins: %j", async (...args) => {
+    const result = await wk([...args, "--personal"], kit);
+    expect(result.code, result.stderr).toBe(0);
+    expect(calls.at(-2)?.body).toMatchObject({ visibility: "personal" });
+    expect(calls.at(-1)?.body).toMatchObject({ visibility: "personal" });
+  });
+
+  it.each([["publish"], ["replace", "private-helper"]])("rejects conflicting visibility flags before any request: %j", async (...args) => {
+    for (const flags of [["--private", "--personal"], ["--personal", "--private"], ["--personal", "--public"], ["--private", "--public"]]) {
+      const count = calls.length;
+      const result = await wk([...args, ...flags], kit);
+      expect(result.code, result.stderr).toBe(2);
+      expect(result.stderr).toContain("cannot be used with option");
+      expect(calls).toHaveLength(count);
+    }
+  });
+
   it("preserves attachment forwarding selections through kit validation and private publication", async () => {
     const apps = [
       { code: "email", operations: ["view_email", "forward_attachments"], visibleFields: ["attachments"] },
@@ -75,5 +92,14 @@ describe.skipIf(!existsSync(dist))("public kit publishing pause", () => {
     expect(result.code, result.stderr).toBe(0);
     expect(calls.at(-2)?.body).toMatchObject({ content: { apps } });
     expect(calls.at(-1)?.body).toMatchObject({ content: { apps } });
+  });
+
+  it("sets and clears personal visibility on an existing private kit", async () => {
+    for (const personal of [true, false]) {
+      const response = await wk(["make-private", "private-helper", personal ? "--personal" : "--no-personal"], {});
+      expect(response.code, response.stderr).toBe(0);
+      expect(calls.at(-1)?.url).toBe("/api/manage/kits/private-helper/make-private");
+      expect(calls.at(-1)?.body).toEqual({ personal });
+    }
   });
 });

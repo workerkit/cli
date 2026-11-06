@@ -60,3 +60,30 @@ it("sends explicit configuration booleans and preserves audiences without null i
   const incomplete = await wk(["configuration", "set", "--expected-version", "3"]);
   expect(incomplete.code).not.toBe(0); expect(calls).toHaveLength(before);
 });
+
+it("sends timeline filters and updates status without leaking the route id into the body", async () => {
+  const response = await wk(["timeline", "--status", '["open"]', "--limit", "5", "--cursor", "next-page"]);
+  expect(response.code, response.stderr).toBe(0);
+  expect(calls.at(-1)).toEqual({ method: "POST", url: "/api/manage/knowledge/timeline",
+    auth: "Bearer pe_mgr_knowledge_test", body: { status: ["open"], limit: 5, cursor: "next-page" } });
+  const id = page.items[0]!.id;
+  const update = await wk(["timeline-status", id, "--status", "done"]);
+  expect(update.code, update.stderr).toBe(0);
+  expect(calls.at(-1)).toEqual({ method: "PUT", url: `/api/manage/knowledge/timeline/${id}/status`,
+    auth: "Bearer pe_mgr_knowledge_test", body: { status: "done" } });
+});
+
+it("requires explicit timeline activation and a configuration version", async () => {
+  for (const enabled of [true, false]) {
+    const response = await wk(["timeline-enable", enabled ? "--enabled" : "--no-enabled", "--expected-version", "3"]);
+    expect(response.code, response.stderr).toBe(0);
+    expect(calls.at(-1)).toEqual({ method: "PUT", url: "/api/manage/knowledge/timeline/settings",
+      auth: "Bearer pe_mgr_knowledge_test", body: { enabled, expectedVersion: 3 } });
+  }
+  const before = calls.length;
+  for (const args of [["--expected-version", "3"], ["--enabled"]]) {
+    const incomplete = await wk(["timeline-enable", ...args]);
+    expect(incomplete.code).not.toBe(0);
+    expect(calls).toHaveLength(before);
+  }
+});

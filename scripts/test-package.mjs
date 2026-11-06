@@ -58,6 +58,12 @@ try {
     assert.ok(actionHelp.includes("--app") && actionHelp.includes("--action-spec"));
     const timezoneHelp = execFileSync(process.execPath, [entry, "workers", "timezone", "--help"], { encoding: "utf8" });
     assert.ok(timezoneHelp.includes("--time-zone-id"));
+    const timelineHelp = execFileSync(process.execPath, [entry, "knowledge", "timeline", "--help"], { encoding: "utf8" });
+    assert.ok(timelineHelp.includes("--observed-since-utc") && timelineHelp.includes("--status"));
+    const timelineEnableHelp = execFileSync(process.execPath, [entry, "knowledge", "timeline-enable", "--help"], { encoding: "utf8" });
+    assert.ok(timelineEnableHelp.includes("--no-enabled") && timelineEnableHelp.includes("--expected-version"));
+    const privateHelp = execFileSync(process.execPath, [entry, "kit", "make-private", "--help"], { encoding: "utf8" });
+    assert.ok(privateHelp.includes("--personal") && privateHelp.includes("--no-personal"));
   }
   console.log(`${pack.name}@${pack.version}: package files and installed consumer passed (${names.length} files)`);
 } finally {

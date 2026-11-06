@@ -20,7 +20,7 @@ export function mountGuidance(program: Command): void {
   }
   program.command("instructions")
     .description("Read the agent rules for a WorkerKit surface without connecting")
-    .addArgument(new Argument("[surface]", "Tool surface").choices(["workers", "decision", "directory"]).default("workers"))
+    .addArgument(new Argument("[surface]", "Tool surface").choices(["workers", "decision", "directory", "knowledge"]).default("workers"))
     .action((surface: ToolProfile) => {
       const instructions = instructionsByProfile[surface];
       process.stdout.write(program.opts().json ? JSON.stringify({ surface, instructions }) + "\n" : formatToolReferences(instructions, program) + "\n");

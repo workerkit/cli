@@ -6,6 +6,24 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-11-05
+
+Requires `@workerkit/core` 0.3.24.
+
+### Added
+
+- Timeline commands (`wk knowledge timeline`, `timeline-status` and `timeline-enable`) and
+  `wk instructions knowledge` for the Knowledge surface's rules.
+- `wk kit publish --personal` and `wk kit replace --personal`: a private kit that only its creator and
+  the account's Admins can see or install (visibility `personal`). `--private` keeps sharing the
+  kit with every member of the account.
+
+### Fixed
+
+- Publish and replace reject conflicting visibility flags before making a request.
+- Publish, replace and listing output distinguish personal kits from account-shared private kits.
+- Release validation requires the timeline and personal-kit contract capabilities.
+
 ## [0.3.8] - 2026-11-03
 
 Requires `@workerkit/core` 0.3.23.

@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import { Option, type Command } from "commander";
 import { readFileSync } from "node:fs";
 import { byName, executeTool, isSuccess, type ApiResult } from "@workerkit/core";
 import { mountTool, globalOpts } from "../bind.js";
@@ -13,10 +13,10 @@ import { sanitizeInline, sanitizeText } from "../output/sanitize.js";
 // Temporary client-side guard; the backend enforces the same pause for all clients.
 const PUBLIC_KIT_PUBLISHING_ENABLED: boolean = false;
 const PUBLIC_KIT_PUBLISHING_PAUSED =
-  "Public kit publishing is temporarily disabled. Use --private (visibility: private) to keep the kit private.";
+  "Public kit publishing is temporarily disabled. Use --private (visibility: private) or --personal (visibility: personal) to keep the kit private.";
 
 function publishingAllowed(visibility: string): boolean {
-  if (PUBLIC_KIT_PUBLISHING_ENABLED || visibility === "private") return true;
+  if (PUBLIC_KIT_PUBLISHING_ENABLED || visibility === "private" || visibility === "personal") return true;
   process.stderr.write(PUBLIC_KIT_PUBLISHING_PAUSED + "\n");
   process.exitCode = 2;
   return false;
@@ -30,6 +30,7 @@ interface MyKitRow {
   slug?: string;
   name?: string | null;
   status?: string;
+  isPersonal?: boolean;
   moderationStatus?: string | null;
   downloadCount?: number;
   installedWorkerCount?: number;
@@ -53,14 +54,19 @@ interface PublishedKit {
   slug?: string;
   name?: string | null;
   status?: string;
+  isPersonal?: boolean;
   moderationStatus?: string | null;
   lintWarnings?: string[];
 }
 
 function paintStatus(status: string): string {
   if (status === "published") return green(status);
-  if (status === "private" || status === "unlisted") return yellow(status);
+  if (status === "private" || status === "personal" || status === "unlisted") return yellow(status);
   return red(status);
+}
+
+function kitStatus(kit: { status?: string; isPersonal?: boolean }): string {
+  return kit.status === "private" && kit.isPersonal === true ? "personal" : kit.status ?? "?";
 }
 
 function paintModeration(state: string): string {
@@ -99,7 +105,7 @@ function renderReport(report: ValidationReport): string {
 function renderPublished(kit: PublishedKit, verb: string): string {
   const lines = [
     `${bold(`${verb}:`)} ${sanitizeInline(kit.name ?? "")} → ${sanitizeInline(kit.slug ?? "?")} ` +
-      `(${paintStatus(sanitizeInline(kit.status ?? "?"))}` +
+      `(${paintStatus(sanitizeInline(kitStatus(kit)))}` +
       (kit.moderationStatus ? `, moderation ${paintModeration(sanitizeInline(kit.moderationStatus))}` : "") +
       ")",
   ];
@@ -216,7 +222,7 @@ export function mountKitAuthoring(kit: Command): void {
       return renderTable(body.items, [
         { header: "SLUG", value: (k) => k.slug ?? "" },
         { header: "NAME", value: (k) => k.name ?? "", maxWidth: 30 },
-        { header: "STATUS", value: (k) => k.status ?? "?", paint: paintStatus },
+        { header: "STATUS", value: kitStatus, paint: paintStatus },
         { header: "MODERATION", value: (k) => k.moderationStatus ?? "", paint: paintModeration },
         { header: "DL", value: (k) => String(k.downloadCount ?? "") },
         { header: "WORKERS", value: (k) => String(k.installedWorkerCount ?? "") },
@@ -289,8 +295,9 @@ export function mountKitAuthoring(kit: Command): void {
     .command("publish")
     .description("Publish a NEW kit from --file or stdin (validates first, then confirms). Publish private first. Language or decision kit: `wk kit guide --section index`.")
     .option("--file <path>", "The kit JSON: listing fields + content, or sourceWorkerId")
-    .option("--private", "Publish as private (installable only by this account, no supply-chain scan)")
-    .option("--public", "Temporarily unavailable: public publishing is paused")
+    .addOption(new Option("--private", "Publish as private (shared with every member of this account, hidden from the directory, no supply-chain scan)").conflicts(["personal", "public"]))
+    .addOption(new Option("--personal", "Publish as personal (private, and only you and account Admins can see or install it)").conflicts(["private", "public"]))
+    .addOption(new Option("--public", "Temporarily unavailable: public publishing is paused").conflicts(["private", "personal"]))
     .option("--skip-validate", "Send it without the dry run");
   publish.action(async (options: Record<string, unknown>) => {
     const globals = globalOpts(publish);
@@ -299,6 +306,7 @@ export function mountKitAuthoring(kit: Command): void {
     const body = await readKitBody(options);
     if (!body) return;
     if (options.private) body.visibility = "private";
+    if (options.personal) body.visibility = "personal";
     if (options.public) body.visibility = "public";
     const visibility = typeof body.visibility === "string" ? body.visibility : "public";
     if (!publishingAllowed(visibility)) return;
@@ -320,8 +328,9 @@ export function mountKitAuthoring(kit: Command): void {
     .description("Replace a listing wholesale from --file or stdin (content required; also swaps schedules and triggers)")
     .argument("<kitRef>")
     .option("--file <path>", "The kit JSON: listing fields + content")
-    .option("--private", "Result is private")
-    .option("--public", "Temporarily unavailable: public publishing and promotion are paused")
+    .addOption(new Option("--private", "Result is private (shared with every member of this account)").conflicts(["personal", "public"]))
+    .addOption(new Option("--personal", "Result is personal (only its creator and account Admins)").conflicts(["private", "public"]))
+    .addOption(new Option("--public", "Temporarily unavailable: public publishing and promotion are paused").conflicts(["private", "personal"]))
     .option("--skip-validate", "Send it without the dry run");
   replace.action(async (kitRef: string, options: Record<string, unknown>) => {
     const globals = globalOpts(replace);
@@ -330,6 +339,7 @@ export function mountKitAuthoring(kit: Command): void {
     const body = await readKitBody(options);
     if (!body) return;
     if (options.private) body.visibility = "private";
+    if (options.personal) body.visibility = "personal";
     if (options.public) body.visibility = "public";
     const visibility = typeof body.visibility === "string" ? body.visibility : "public";
     if (!publishingAllowed(visibility)) return;

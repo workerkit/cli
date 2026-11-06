@@ -66,7 +66,7 @@ export const bespokeCommandBindings: Record<string, BespokeCommand> = {
         "appDescriptions", "recommendedClients", "recommendedModel", "decisionProfileId", "declaredModelFloor",
         "modelScores", "content", "sourceWorkerId",
       ),
-      visibility: "Set by --private / --public, so the choice is never a bare string.",
+      visibility: "Set by --private / --personal / --public, so the choice is never a bare string.",
     },
   },
 
@@ -78,7 +78,7 @@ export const bespokeCommandBindings: Record<string, BespokeCommand> = {
         "appDescriptions", "recommendedClients", "recommendedModel", "decisionProfileId", "declaredModelFloor",
         "modelScores", "content",
       ),
-      visibility: "Set by --private / --public, so the choice is never a bare string.",
+      visibility: "Set by --private / --personal / --public, so the choice is never a bare string.",
     },
   },
 
