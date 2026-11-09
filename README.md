@@ -85,6 +85,7 @@ wk workers action-options [--app ...]   # Action worker apps, tools and defaults
 wk workers create-action --app ... --name ... --request-id ...   # Action worker: no model, never deployed
 wk workers tools|invoke|invocation <tokenId> ...   # list an Action worker's tools, call one, read a write's receipt
 wk workers quality get|set|preview <tokenId> ...   # acceptance criteria and quality gates (see Worker quality)
+wk workers approval-policy <tokenId>  # the worker's human-review requirement: mode, selected tools, expiry and what it inherits
 wk workers files get|delete|storage|set-storage <tokenId> ...   # an upload's status, revoke it, read or choose private file-intake storage
 
 wk deploy <tokenId> [--model-slug ...]   # enable hosted runs and schedules; does not start a run
@@ -111,6 +112,9 @@ wk account usage                      # plan, worker + hosted slots, wallet, req
 wk account spend                      # this UTC day's and month's run spend, by worker, day and model
 wk activity feed [--kind run|call|change] [--outcome ...] [--worker-id ...] [--since ...]   # runs, app calls and configuration changes, newest first
 wk activity summary [--since ...] [--until ...]   # the same activity counted over a window
+
+wk approvals list [--status attention] [--worker-id ...] [--run-id ...]   # approval requests and their execution states (see Human approval)
+wk approvals get <id>                 # one request's exact fields, decision, revision thread and result
 
 wk knowledge sources|search|get|changes   # retained worker reports a key may read: discover sources, lexical search, read evidence, reconcile changes
 wk knowledge configuration get|set    # account admin: activation, enrolled sources and reader grants
@@ -330,15 +334,33 @@ wk workers invocation 42 <invocationId> --json
 ```
 
 Calls and receipts need `invokeActions`. A call answers with `status` `succeeded`, `denied`,
-`failed`, `in_progress` or `outcome_unknown`; `invoke` prints the full receipt and exits nonzero
-unless the call succeeded. Native and MCP reads take JSON arguments the same way and need no key;
-`wk workers tools` reports each tool's `idempotencyRequired` and `keyFormat`, and every private
-API operation, including reads, needs a `v1:<Unix timestamp>:<32-hex UUID>` key. After a
-transport failure, repeat the same key with the same arguments: it returns the stored result
-without calling the app again. `outcome_unknown` means the app may have acted: read the receipt,
-check the app, and never retry under a new key. A refusal marked `retryable` can be tried again
-later under a new key. Native and MCP write receipts keep the confirmation, not the app's private
-response, so never resend to recover a lost response.
+`failed`, `in_progress`, `outcome_unknown` or `pending_approval`; `invoke` prints the full receipt
+and exits nonzero unless the call succeeded. Native and MCP reads take JSON arguments the same
+way and need no key; `wk workers tools` reports each tool's `idempotencyRequired` and `keyFormat`,
+and every private API operation, including reads, needs a `v1:<Unix timestamp>:<32-hex UUID>` key.
+After a transport failure, repeat the same key with the same arguments: it returns the stored
+result without calling the app again. `outcome_unknown` means the app may have acted: read the
+receipt, check the app, and never retry under a new key. A refusal marked `retryable` can be tried
+again later under a new key. Native and MCP write receipts keep the confirmation, not the app's
+private response, so never resend to recover a lost response.
+
+## Human approval
+
+A worker, its account, a policy group or a parent worker can require that a person review an
+action before it runs. `wk workers invoke` then prints a receipt with `status` `pending_approval`,
+`executed: false` and a `result.approvalId`, and exits nonzero: nothing has reached the app.
+
+```sh
+wk approvals list --status attention --json
+wk approvals get <approvalId> --json
+wk workers approval-policy 42 --json
+```
+
+`list` and `get` need `readRuns`; `approval-policy` needs `readWorkers` and shows the worker's
+own mode, selected tools and expiry plus the requirements it inherits and cannot remove.
+Decisions are made by a person at the request's `reviewUrl` in the dashboard; the CLI has no
+approve, decline, revise or cancel command. Approval is not execution: read `executionState`
+and the tool's confirmed result, and never repeat a call under a new key to get around review.
 
 ## Worker quality
 

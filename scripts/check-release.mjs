@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { byName, backendContractProvenance } from "@workerkit/core";
+import { backendContractProvenance } from "@workerkit/core";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
@@ -30,16 +30,6 @@ const requiredCore = notes.match(/^Requires `@workerkit\/core` (\d+\.\d+\.\d+)\.
 assert.ok(requiredCore, "Release notes must declare the required @workerkit/core version");
 assert.equal(pkg.dependencies["@workerkit/core"], requiredCore,
   "The @workerkit/core pin must match this release's requirement; publish the reviewed core version and update the registry lockfile first");
-for (const name of ["knowledge_timeline", "knowledge_timeline_status", "knowledge_timeline_enable"]) {
-  assert.ok(byName(name),
-    `The pinned @workerkit/core lacks ${name}; publish the reviewed core release and update the dependency pin and registry lockfile first`);
-}
-for (const name of ["kit_validate", "kit_publish", "kit_replace"]) {
-  assert.ok(byName(name)?.schema.visibility?.safeParse("personal").success,
-    `The pinned @workerkit/core lacks personal visibility in ${name}; update the dependency pin and registry lockfile`);
-}
-assert.ok(byName("kit_make_private")?.schema.personal,
-  "The pinned @workerkit/core lacks the kit_make_private personal flag");
 assert.match(backendContractProvenance.sourceRevision, /^[a-f0-9]{40}$/,
   "CLI publication requires a core release from a reviewed backend commit, not a working-tree contract");
 process.stdout.write(notes + "\n");

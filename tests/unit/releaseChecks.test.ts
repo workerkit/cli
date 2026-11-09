@@ -10,9 +10,6 @@ const fixtures: string[] = [];
 afterEach(() => { for (const dir of fixtures.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 
 interface CoreFixture {
-  missingTool?: string;
-  withoutPersonalVisibility?: string;
-  withoutPersonalFlag?: boolean;
   sourceRevision?: string;
 }
 
@@ -33,17 +30,6 @@ function check(required: string | undefined, pin = "1.2.3", tag = "v0.1.0", core
     const fixture = ${JSON.stringify(core)};
     // Synthetic provenance exercises the format guard only; it is not a backend commit.
     export const backendContractProvenance = { sourceRevision: fixture.sourceRevision ?? "a".repeat(40) };
-    export function byName(name) {
-      if (name === fixture.missingTool) return undefined;
-      if (["knowledge_timeline", "knowledge_timeline_status", "knowledge_timeline_enable"].includes(name))
-        return { schema: {} };
-      if (["kit_validate", "kit_publish", "kit_replace"].includes(name))
-        return { schema: { visibility: { safeParse: value => ({ success:
-          value === "personal" && name !== fixture.withoutPersonalVisibility }) } } };
-      if (name === "kit_make_private")
-        return { schema: fixture.withoutPersonalFlag ? {} : { personal: {} } };
-      return undefined;
-    }
   `);
   const pkg = { version: "0.1.0", dependencies: { "@workerkit/core": pin } };
   const lock = { version: pkg.version, packages: {
@@ -82,26 +68,7 @@ describe("release requirements", () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("Release tag must match package.json exactly");
   });
-  it.each(["knowledge_timeline", "knowledge_timeline_status", "knowledge_timeline_enable"])(
-    "rejects a core release missing %s despite matching metadata", missingTool => {
-      const result = check("1.2.3", "1.2.3", "v0.1.0", { missingTool });
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toContain(`The pinned @workerkit/core lacks ${missingTool};`);
-    },
-  );
-  it.each(["kit_validate", "kit_publish", "kit_replace"])(
-    "requires personal visibility in %s", withoutPersonalVisibility => {
-      const result = check("1.2.3", "1.2.3", "v0.1.0", { withoutPersonalVisibility });
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toContain(`lacks personal visibility in ${withoutPersonalVisibility};`);
-    },
-  );
-  it("requires the personal audience flag on kit_make_private", () => {
-    const result = check("1.2.3", "1.2.3", "v0.1.0", { withoutPersonalFlag: true });
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("lacks the kit_make_private personal flag");
-  });
-  it("rejects working-tree provenance even when all required tools exist", () => {
+  it("rejects working-tree provenance even when the metadata matches", () => {
     const result = check("1.2.3", "1.2.3", "v0.1.0", { sourceRevision: "working-tree-test-fixture" });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("not a working-tree contract");

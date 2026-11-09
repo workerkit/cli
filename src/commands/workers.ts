@@ -48,6 +48,7 @@ export function mountWorkers(program: Command): void {
   });
 
   const quality = workers.command("quality").description("Review quality criteria and gates; owner-only improvement controls are in the dashboard");
+  mountTool(workers, "approval-policy", { tool: "worker_approvals_get", positionals: ["tokenId"] });
   mountTool(quality, "get", { tool: "worker_quality_get", positionals: ["tokenId"] });
   mountTool(quality, "set", { tool: "worker_quality_set", positionals: ["tokenId"] });
   mountTool(quality, "preview", { tool: "worker_quality_preview", positionals: ["tokenId"] });

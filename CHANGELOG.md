@@ -6,6 +6,26 @@ and the package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-11-09
+
+Requires `@workerkit/core` 0.3.26.
+
+### Added
+
+- `wk approvals list` and `wk approvals get <id>` read the approval requests raised for the workers a
+  key reaches, with their decision and execution states (`readRuns`), and `wk workers approval-policy
+  <tokenId>` reads a worker's configured human-review requirement and the requirements it inherits
+  (`readWorkers`). Decisions stay in the dashboard; the CLI has no approve, decline, revise or cancel
+  command.
+
+### Changed
+
+- `wk workers invoke` documents the `pending_approval` receipt: the action is parked with
+  `executed: false` and an `approvalId`, nothing has reached the app, and the command exits nonzero
+  like any call that has not succeeded.
+- Release validation no longer repeats per-feature checks that the exact `@workerkit/core` version
+  pin, its registry resolution and the command coverage tests already guarantee.
+
 ## [0.3.10] - 2026-11-06
 
 Requires `@workerkit/core` 0.3.25.
